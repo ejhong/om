@@ -47,8 +47,8 @@
     .top-bar {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 16px 24px;
+      justify-content: center;
+      padding: 12px 24px;
       border-bottom: 1px solid var(--border);
       background: var(--bg);
       flex-shrink: 0;
@@ -60,10 +60,15 @@
       letter-spacing: 0.5px;
     }
 
-    .top-controls {
+    /* Settings row below visualization */
+    .settings-row {
       display: flex;
       align-items: center;
-      gap: 24px;
+      justify-content: flex-end;
+      gap: 20px;
+      padding: 10px 24px;
+      background: var(--bg);
+      flex-shrink: 0;
     }
 
     .preset-select {
@@ -357,16 +362,29 @@
       }
 
       .top-bar {
-        padding: 10px 12px;
-        gap: 8px;
+        padding: 8px 12px;
       }
 
       .title {
         font-size: 14px;
       }
 
-      .top-controls {
-        gap: 8px;
+      .main-content {
+        flex-direction: column;
+      }
+
+      .notes-panel {
+        display: none;
+      }
+
+      .visualization {
+        flex: 1;
+        padding: 12px;
+      }
+
+      .settings-row {
+        padding: 8px 12px;
+        gap: 12px;
       }
 
       .volume-control label,
@@ -382,19 +400,6 @@
       .preset-select {
         padding: 6px 8px;
         font-size: 11px;
-      }
-
-      .main-content {
-        flex-direction: column;
-      }
-
-      .notes-panel {
-        display: none;
-      }
-
-      .visualization {
-        flex: 1;
-        padding: 12px;
       }
 
       .controls {
@@ -420,8 +425,7 @@
       }
 
       .time-display {
-        font-size: 10px;
-        min-width: auto;
+        display: none;
       }
 
       .speed-select {
@@ -435,22 +439,6 @@
   <!-- Top Bar -->
   <div class="top-bar">
     <div class="title">The OM Project</div>
-    <div class="top-controls">
-      <div class="volume-control">
-        <label>Vol</label>
-        <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="75">
-      </div>
-      <div class="tuning-control">
-        <label>Tune</label>
-        <input type="range" class="tuning-slider" id="tuningSlider" min="-6" max="6" value="0" step="0.1">
-      </div>
-      <select class="preset-select" id="presetSelect">
-        <option value="smad">smad</option>
-        <option value="nndl">nndl</option>
-        <option value="grat">grat</option>
-        <option value="meta">meta</option>
-      </select>
-    </div>
   </div>
 
   <!-- Main Content -->
@@ -466,6 +454,24 @@
         <canvas id="canvas"></canvas>
       </div>
     </div>
+  </div>
+
+  <!-- Settings Row -->
+  <div class="settings-row">
+    <div class="volume-control">
+      <label>Vol</label>
+      <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="75">
+    </div>
+    <div class="tuning-control">
+      <label>Tune</label>
+      <input type="range" class="tuning-slider" id="tuningSlider" min="-6" max="6" value="0" step="0.1">
+    </div>
+    <select class="preset-select" id="presetSelect">
+      <option value="smad">smad</option>
+      <option value="nndl">nndl</option>
+      <option value="grat">grat</option>
+      <option value="meta">meta</option>
+    </select>
   </div>
 
   <!-- Bottom Controls -->
@@ -864,10 +870,7 @@
       ctx.fillStyle = '#8a7d6d';
       ctx.fillText(baseHz.toFixed(1) + ' Hz', frameX, frameY - 8);
 
-      // Draw legend row below frame, right-aligned
-      const legendY = frameY + frameH + 16;
-
-      // Voice color legend on right
+      // Voice color legend above top right corner of frame
       const legendItems = [
         { color: '#7a8085', label: 'tlk' },
         { color: '#b07060', label: 'rap' },
@@ -879,12 +882,14 @@
       const dotHeight = 10;
       const legendWidth = legendItems.length * itemWidth;
       let legendX = frameX + frameW - legendWidth;
+      const legendY = frameY - 8;
 
+      ctx.textAlign = 'left';
       for (const item of legendItems) {
         // Draw color dot
         ctx.fillStyle = item.color;
         ctx.beginPath();
-        ctx.roundRect(legendX, legendY - dotHeight/2, dotWidth, dotHeight, 2);
+        ctx.roundRect(legendX, legendY - dotHeight + 3, dotWidth, dotHeight, 2);
         ctx.fill();
         // Draw label
         ctx.fillStyle = '#8a7d6d';
