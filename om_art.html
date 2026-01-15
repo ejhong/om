@@ -494,6 +494,12 @@
             <path d="M8 5v14l11-7z"/>
           </svg>
         </button>
+        <select class="preset-select" id="presetSelect">
+          <option value="smad">smad</option>
+          <option value="nndl">nndl</option>
+          <option value="grat">grat</option>
+          <option value="meta">meta</option>
+        </select>
         <div class="timeline-container">
           <div class="timeline" id="timeline">
             <div class="timeline-progress" id="timelineProgress"></div>
@@ -516,15 +522,6 @@
             <div class="settings-row">
               <label>Tune</label>
               <input type="range" class="tuning-slider" id="tuningSlider" min="-6" max="6" value="0" step="0.1">
-            </div>
-            <div class="settings-row">
-              <label>Preset</label>
-              <select class="preset-select" id="presetSelect">
-                <option value="smad">smad</option>
-                <option value="nndl">nndl</option>
-                <option value="grat">grat</option>
-                <option value="meta">meta</option>
-              </select>
             </div>
             <div class="settings-row">
               <label>Speed</label>
@@ -949,12 +946,13 @@
         }
       }
 
-      // Preset name at top left
-      const currentPreset = document.getElementById('presetSelect').value;
+      // Hz display above top left corner of frame
+      const tuning = getTuning();
+      const baseHz = 261.63 * Math.pow(2, tuning / 12);
       ctx.font = '10px SF Mono, Monaco, monospace';
       ctx.textAlign = 'left';
       ctx.fillStyle = '#8a7d6d';
-      ctx.fillText(currentPreset, frameX, frameY - 8);
+      ctx.fillText(baseHz.toFixed(1) + ' Hz', frameX, frameY - 8);
 
       // Voice color legend above top right corner of frame
       const legendItems = [
@@ -967,20 +965,8 @@
       const dotWidth = 20;
       const dotHeight = 10;
       const legendWidth = legendItems.length * itemWidth;
-
-      // Hz display before legend
-      const tuning = getTuning();
-      const baseHz = 261.63 * Math.pow(2, tuning / 12);
-      const hzText = baseHz.toFixed(1) + ' Hz';
-      const hzWidth = 55;
-
-      let legendX = frameX + frameW - legendWidth - hzWidth;
+      let legendX = frameX + frameW - legendWidth;
       const legendY = frameY - 12;
-
-      // Draw Hz
-      ctx.fillStyle = '#8a7d6d';
-      ctx.fillText(hzText, legendX, legendY + 3);
-      legendX += hzWidth;
 
       ctx.textAlign = 'left';
       for (const item of legendItems) {
