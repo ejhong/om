@@ -47,27 +47,26 @@
     .top-bar {
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       padding: 12px 24px;
       border-bottom: 1px solid var(--border);
-      background: var(--bg);
+      background: var(--border);
       flex-shrink: 0;
     }
 
     .title {
       font-size: 20px;
-      font-weight: 300;
+      font-weight: 700;
       letter-spacing: 0.5px;
     }
 
-    /* Settings under graph */
+    /* Settings under graph - width set by JS to match frame */
     .graph-settings {
       display: flex;
       align-items: center;
       justify-content: flex-end;
       gap: 16px;
-      padding: 8px 0;
-      margin-top: 8px;
+      padding: 12px 0 0 0;
     }
 
     .preset-select {
@@ -219,7 +218,7 @@
       gap: 16px;
       padding: 16px 24px;
       border-top: 1px solid var(--border);
-      background: var(--bg);
+      background: var(--border);
       flex-shrink: 0;
     }
 
@@ -263,7 +262,7 @@
     .timeline {
       flex: 1;
       height: 6px;
-      background: var(--border);
+      background: var(--frame-border);
       border-radius: 3px;
       cursor: pointer;
       position: relative;
@@ -305,15 +304,20 @@
 
     .speed-select {
       font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
-      font-size: 12px;
-      padding: 6px 10px;
+      font-size: 13px;
+      padding: 8px 16px;
       border: 1px solid var(--border);
-      border-radius: 4px;
+      border-radius: 6px;
       background: var(--bg);
       color: var(--text-primary);
       cursor: pointer;
       outline: none;
       flex-shrink: 0;
+      transition: border-color 0.2s;
+    }
+
+    .speed-select:hover {
+      border-color: var(--accent);
     }
 
     /* Segment markers on timeline */
@@ -390,7 +394,7 @@
 
       .volume-control label,
       .tuning-control label {
-        display: none;
+        font-size: 10px;
       }
 
       .volume-slider,
@@ -400,8 +404,9 @@
 
       .preset-select,
       .speed-select {
-        padding: 6px 8px;
+        padding: 6px 10px;
         font-size: 11px;
+        height: 28px;
       }
 
       .controls {
@@ -878,7 +883,7 @@
       const dotHeight = 10;
       const legendWidth = legendItems.length * itemWidth;
       let legendX = frameX + frameW - legendWidth;
-      const legendY = frameY - 8;
+      const legendY = frameY - 12;
 
       ctx.textAlign = 'left';
       for (const item of legendItems) {
@@ -891,6 +896,12 @@
         ctx.fillStyle = '#8a7d6d';
         ctx.fillText(item.label, legendX + dotWidth + 4, legendY + 3);
         legendX += itemWidth;
+      }
+
+      // Set graph-settings width to match frame
+      const graphSettings = document.querySelector('.graph-settings');
+      if (graphSettings) {
+        graphSettings.style.width = frameW + 'px';
       }
     }
 
