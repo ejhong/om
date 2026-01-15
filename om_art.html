@@ -1108,7 +1108,8 @@
       }
     }
 
-    document.getElementById('playBtn').addEventListener('click', () => {
+    document.getElementById('playBtn').addEventListener('click', async () => {
+      await Tone.start();
       if (isPlaying) {
         stopPlayback();
       } else {
@@ -1140,7 +1141,9 @@
       }, 150);
     }
 
-    function doPlayTuningPreview(semitones) {
+    async function doPlayTuningPreview(semitones) {
+      await Tone.start();
+
       // Stop any existing preview
       if (tuningTone) {
         tuningTone.dispose();
