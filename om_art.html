@@ -424,23 +424,24 @@
         gap: 8px;
       }
 
-      /* Graph takes remaining space after notes panel */
+      /* Graph area - fixed height */
       .visualization {
-        flex: 1;
-        min-height: 0;
-        order: 1;
+        flex: none;
+        height: auto;
+        width: 100%;
       }
 
-      /* Notes panel fixed height at bottom */
+      .canvas-container {
+        height: 200px;
+      }
+
+      /* Notes panel - taller on mobile */
       .notes-panel {
         width: 100%;
         min-width: unset;
         max-width: unset;
-        height: 180px;
-        min-height: 180px;
-        max-height: 180px;
+        height: 540px;
         flex-shrink: 0;
-        order: 2;
       }
 
       .player-controls {
