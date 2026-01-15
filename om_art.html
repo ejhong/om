@@ -72,9 +72,9 @@
 
     /* Right Panel - Notes List (YouTube chat style) */
     .notes-panel {
-      width: 280px;
-      min-width: 280px;
-      max-width: 280px;
+      width: 220px;
+      min-width: 220px;
+      max-width: 220px;
       background: var(--panel-bg);
       border-radius: 12px;
       overflow: hidden;
@@ -88,6 +88,7 @@
       font-size: 12px;
       font-weight: 600;
       color: #c4b8a8;
+      background: #232220;
       border-bottom: 1px solid #3a3836;
       flex-shrink: 0;
     }
@@ -97,6 +98,7 @@
       overflow-y: auto;
       overflow-x: hidden;
       padding: 8px 0;
+      background: #3d3a36;
     }
 
     .segment-header {
@@ -626,6 +628,17 @@
     });
 
     // ========== NOTES PANEL ==========
+    // Scroll note into view within panel only (avoid scrolling whole page)
+    function scrollNoteIntoView(noteItem, smooth = false) {
+      const container = document.getElementById('notesPanelContent');
+      if (!container || !noteItem) return;
+      const containerRect = container.getBoundingClientRect();
+      const itemRect = noteItem.getBoundingClientRect();
+      const relativeTop = itemRect.top - containerRect.top + container.scrollTop;
+      const targetScroll = relativeTop - containerRect.height / 2 + itemRect.height / 2;
+      container.scrollTo({ top: targetScroll, behavior: smooth ? 'smooth' : 'auto' });
+    }
+
     function renderNotesPanel() {
       const panel = document.getElementById('notesPanelContent');
       panel.innerHTML = '';
@@ -647,27 +660,15 @@
           item.className = 'note-item';
           item.dataset.index = noteIndex;
 
-          // Calculate intensity based on distance from C (trajectory 0)
-          // Notes at C are lighter, notes further away are darker/more intense
-          const trajMagnitude = Math.abs(note.trajStart);
-          const intensity = Math.min(1, trajMagnitude / 0.8); // 0 at C, 1 at max distance
-
-          // Base colors for each voice type (earth tones)
-          const baseColors = {
-            tlk: { r: 122, g: 128, b: 133 },  // stone gray #7a8085
-            rap: { r: 176, g: 112, b: 96 },   // terracotta #b07060
-            ydl: { r: 106, g: 138, b: 106 },  // sage #6a8a6a
-            sng: { r: 138, g: 112, b: 144 }   // dusty plum #8a7090
+          // Bright colors for each voice type
+          const voiceColors = {
+            tlk: '#a0a8b0',  // light stone
+            rap: '#e0a090',  // light terracotta
+            ydl: '#90c090',  // light sage
+            sng: '#c0a0d0'   // light plum
           };
 
-          const base = baseColors[note.voiceType] || baseColors.tlk;
-          // Darken based on intensity (further from C = darker)
-          const darken = intensity * 40;
-          const r = Math.max(0, Math.round(base.r - darken));
-          const g = Math.max(0, Math.round(base.g - darken));
-          const b = Math.max(0, Math.round(base.b - darken));
-
-          item.style.background = `rgb(${r}, ${g}, ${b})`;
+          item.style.color = voiceColors[note.voiceType] || voiceColors.tlk;
 
           const trajStr = note.trajStart >= 0 ? `+${note.trajStart.toFixed(2)}` : note.trajStart.toFixed(2);
           const freqStr = note.frequency.toFixed(2);
@@ -1023,8 +1024,8 @@
       // Scroll to current note
       const notesPanel = document.querySelector('.notes-panel');
       const startNoteItem = document.querySelector(`.note-item[data-index="${startIndex}"]`);
-      if (notesPanel && startNoteItem) {
-        startNoteItem.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+      if (startNoteItem) {
+        scrollNoteIntoView(startNoteItem, false);
       }
 
       // Highlight starting note
@@ -1056,8 +1057,7 @@
             const noteItem = document.querySelector(`.note-item[data-index="${i}"]`);
             if (noteItem) {
               noteItem.classList.add('playing');
-              // Use instant scroll at higher speeds to avoid animation backup
-              noteItem.scrollIntoView({ behavior: playbackSpeed > 1 ? 'auto' : 'smooth', block: 'nearest' });
+              scrollNoteIntoView(noteItem, playbackSpeed <= 1);
             }
 
             updateTimeline();
@@ -1154,7 +1154,7 @@
       const noteItem = document.querySelector(`.note-item[data-index="${noteIndex}"]`);
       if (noteItem) {
         noteItem.classList.add('playing');
-        noteItem.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+        scrollNoteIntoView(noteItem, false);
       }
     }
 
