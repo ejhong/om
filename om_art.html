@@ -435,7 +435,9 @@
       }
 
       .canvas-container {
-        height: 220px; /* Fixed height for graph area */
+        height: auto;
+        aspect-ratio: 2.5 / 1; /* Width-based height to fit graph with 4:1 ratio plus frame/labels */
+        min-height: 180px;
       }
 
       /* Notes panel below */
