@@ -949,13 +949,12 @@
         }
       }
 
-      // Hz display above top left corner of frame
-      const tuning = getTuning();
-      const baseHz = 261.63 * Math.pow(2, tuning / 12);
+      // Preset name at top left
+      const currentPreset = document.getElementById('presetSelect').value;
       ctx.font = '10px SF Mono, Monaco, monospace';
       ctx.textAlign = 'left';
       ctx.fillStyle = '#8a7d6d';
-      ctx.fillText(baseHz.toFixed(1) + ' Hz', frameX, frameY - 8);
+      ctx.fillText(currentPreset, frameX, frameY - 8);
 
       // Voice color legend above top right corner of frame
       const legendItems = [
@@ -968,8 +967,20 @@
       const dotWidth = 20;
       const dotHeight = 10;
       const legendWidth = legendItems.length * itemWidth;
-      let legendX = frameX + frameW - legendWidth;
+
+      // Hz display before legend
+      const tuning = getTuning();
+      const baseHz = 261.63 * Math.pow(2, tuning / 12);
+      const hzText = baseHz.toFixed(1) + ' Hz';
+      const hzWidth = 55;
+
+      let legendX = frameX + frameW - legendWidth - hzWidth;
       const legendY = frameY - 12;
+
+      // Draw Hz
+      ctx.fillStyle = '#8a7d6d';
+      ctx.fillText(hzText, legendX, legendY + 3);
+      legendX += hzWidth;
 
       ctx.textAlign = 'left';
       for (const item of legendItems) {
