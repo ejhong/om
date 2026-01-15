@@ -24,6 +24,25 @@ const OM_DEFAULTS = {
   defaultVolume: 18   // Default volume in dB
 };
 
+// Global tuning offset in semitones (0 = C4 reference, -12 = C3, +12 = C5)
+let tuningOffset = 0;
+
+/**
+ * Set the global tuning offset
+ * @param {number} semitones - Offset in semitones (-12 to +12)
+ */
+function setTuning(semitones) {
+  tuningOffset = semitones;
+}
+
+/**
+ * Get the current tuning offset
+ * @returns {number} Current offset in semitones
+ */
+function getTuning() {
+  return tuningOffset;
+}
+
 /**
  * Calculate velocity based on trajectory magnitude
  */
@@ -134,8 +153,8 @@ function buildNote(spec, voiceType, mode, register, articulation, octaveLayer, p
   const trajStartSemitones = trajStart * 2;
   const trajEndSemitones = trajEnd * 2;
 
-  // Calculate frequencies
-  const baseSemitonesFromC4 = (finalOctave - 4) * 12 + semitoneInOctave;
+  // Calculate frequencies (apply global tuning offset)
+  const baseSemitonesFromC4 = (finalOctave - 4) * 12 + semitoneInOctave + tuningOffset;
   const startFrequency = 261.63 * Math.pow(2, (baseSemitonesFromC4 + trajStartSemitones) / 12);
   const endFrequency = 261.63 * Math.pow(2, (baseSemitonesFromC4 + trajEndSemitones) / 12);
 

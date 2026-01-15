@@ -95,7 +95,8 @@
       color: var(--text-muted);
     }
 
-    .volume-slider {
+    .volume-slider,
+    .tuning-slider {
       width: 80px;
       height: 4px;
       -webkit-appearance: none;
@@ -104,7 +105,20 @@
       outline: none;
     }
 
-    .volume-slider::-webkit-slider-thumb {
+    /* Tuning control */
+    .tuning-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tuning-control label {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .volume-slider::-webkit-slider-thumb,
+    .tuning-slider::-webkit-slider-thumb {
       -webkit-appearance: none;
       width: 14px;
       height: 14px;
@@ -318,25 +332,6 @@
       color: var(--text-muted);
     }
 
-    /* Legend */
-    .legend {
-      display: flex;
-      gap: 16px;
-      font-size: 11px;
-    }
-
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .legend-dot {
-      width: 24px;
-      height: 12px;
-      border-radius: 2px;
-    }
-
     /* Scrollbar styling */
     .notes-panel::-webkit-scrollbar {
       width: 6px;
@@ -361,15 +356,13 @@
   <div class="top-bar">
     <div class="title">The OM Project</div>
     <div class="top-controls">
-      <div class="legend">
-        <div class="legend-item"><div class="legend-dot" style="background: #7a8085"></div>tlk</div>
-        <div class="legend-item"><div class="legend-dot" style="background: #b07060"></div>rap</div>
-        <div class="legend-item"><div class="legend-dot" style="background: #6a8a6a"></div>ydl</div>
-        <div class="legend-item"><div class="legend-dot" style="background: #8a7090"></div>sng</div>
-      </div>
       <div class="volume-control">
         <label>Vol</label>
         <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="75">
+      </div>
+      <div class="tuning-control">
+        <label>Tune</label>
+        <input type="range" class="tuning-slider" id="tuningSlider" min="-6" max="6" value="0" step="0.1">
       </div>
       <select class="preset-select" id="presetSelect">
         <option value="smad">smad</option>
@@ -761,6 +754,42 @@
           noteCount += segNotes;
         }
       }
+
+      // Hz display above top left corner of frame
+      const tuning = getTuning();
+      const baseHz = 261.63 * Math.pow(2, tuning / 12);
+      ctx.font = '10px SF Mono, Monaco, monospace';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#8a7d6d';
+      ctx.fillText(baseHz.toFixed(1) + ' Hz', frameX, frameY - 8);
+
+      // Draw legend row below frame, right-aligned
+      const legendY = frameY + frameH + 16;
+
+      // Voice color legend on right
+      const legendItems = [
+        { color: '#7a8085', label: 'tlk' },
+        { color: '#b07060', label: 'rap' },
+        { color: '#6a8a6a', label: 'ydl' },
+        { color: '#8a7090', label: 'sng' }
+      ];
+      const itemWidth = 50;
+      const dotWidth = 20;
+      const dotHeight = 10;
+      const legendWidth = legendItems.length * itemWidth;
+      let legendX = frameX + frameW - legendWidth;
+
+      for (const item of legendItems) {
+        // Draw color dot
+        ctx.fillStyle = item.color;
+        ctx.beginPath();
+        ctx.roundRect(legendX, legendY - dotHeight/2, dotWidth, dotHeight, 2);
+        ctx.fill();
+        // Draw label
+        ctx.fillStyle = '#8a7d6d';
+        ctx.fillText(item.label, legendX + dotWidth + 4, legendY + 3);
+        legendX += itemWidth;
+      }
     }
 
     // ========== PLAYBACK ==========
@@ -998,6 +1027,72 @@
 
     document.getElementById('volumeSlider').addEventListener('input', (e) => {
       volume = (e.target.value / 100) * 48 - 24; // Map 0-100 to -24 to +24 dB
+    });
+
+    // Play a preview tone for tuning (sounds like mdl/sld voice)
+    let tuningTone = null;
+    let tuningEffects = [];
+    let tuningDebounceTimer = null;
+
+    function playTuningPreview(semitones) {
+      // Debounce: wait for user to pause before playing
+      if (tuningDebounceTimer) {
+        clearTimeout(tuningDebounceTimer);
+      }
+      tuningDebounceTimer = setTimeout(() => {
+        doPlayTuningPreview(semitones);
+      }, 150);
+    }
+
+    function doPlayTuningPreview(semitones) {
+      // Stop any existing preview
+      if (tuningTone) {
+        tuningTone.dispose();
+        tuningTone = null;
+      }
+      tuningEffects.forEach(e => e.dispose());
+      tuningEffects = [];
+
+      // Calculate frequency: C4 = 261.63 Hz, shifted by semitones
+      const freq = 261.63 * Math.pow(2, semitones / 12);
+
+      // Use FMSynth similar to tlk/mdl/sld voice
+      tuningTone = new Tone.FMSynth({
+        harmonicity: 2,
+        modulationIndex: 6,
+        oscillator: { type: 'sine' },
+        envelope: { attack: 0.15, decay: 0.1, sustain: 0.6, release: 0.3 },
+        modulation: { type: 'triangle' },
+        modulationEnvelope: { attack: 0.1, decay: 0.1, sustain: 0.4, release: 0.3 }
+      });
+
+      // Modal gain boost
+      const gain = new Tone.Gain(1.5);
+      tuningEffects.push(gain);
+
+      tuningTone.chain(gain, Tone.Destination);
+      tuningTone.volume.value = volume - 12; // quieter than main playback
+      tuningTone.triggerAttackRelease(freq, 0.4);
+
+      // Clean up after note finishes
+      setTimeout(() => {
+        if (tuningTone) {
+          tuningTone.dispose();
+          tuningTone = null;
+        }
+        tuningEffects.forEach(e => e.dispose());
+        tuningEffects = [];
+      }, 600);
+    }
+
+    document.getElementById('tuningSlider').addEventListener('input', (e) => {
+      const semitones = parseFloat(e.target.value);
+      setTuning(semitones);
+      // Re-parse notes with new tuning (frequencies are calculated at parse time)
+      // This also redraws the visualization which shows Hz on the canvas
+      document.getElementById('presetSelect').dispatchEvent(new Event('change'));
+      // Play preview tone
+      playTuningPreview(semitones);
     });
 
     document.getElementById('presetSelect').addEventListener('change', (e) => {
