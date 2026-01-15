@@ -180,12 +180,6 @@
       outline: none;
     }
 
-    .hz-display {
-      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
-      font-size: 10px;
-      color: var(--text-muted);
-    }
-
     /* Player Controls Bar (YouTube style - at bottom of video) */
     .player-controls {
       display: flex;
@@ -519,7 +513,6 @@
             <option value="grat">grat</option>
             <option value="meta">meta</option>
           </select>
-          <span class="hz-display" id="hzDisplay">261.6 Hz</span>
         </div>
       </div>
       <!-- Player Controls Bar (YouTube style) -->
@@ -784,8 +777,8 @@
       const frameY = offsetY - frameTopPadding;
 
       const overlay = document.querySelector('.canvas-overlay');
-      overlay.style.left = frameX + 'px';
-      overlay.style.top = (frameY - 14) + 'px';
+      overlay.style.left = (frameX + 8) + 'px';
+      overlay.style.top = (frameY - 25) + 'px';
     }
 
     function trajectoryToY(traj, height, padding) {
@@ -1007,6 +1000,14 @@
           noteCount += segNotes;
         }
       }
+
+      // Hz display above frame (offset right to make room for preset dropdown)
+      const tuning = getTuning();
+      const baseHz = 261.63 * Math.pow(2, tuning / 12);
+      ctx.font = '10px SF Mono, Monaco, monospace';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#8a7d6d';
+      ctx.fillText(baseHz.toFixed(1) + ' Hz', frameX + 72, frameY - 11);
 
       // Voice color legend above top right corner of frame
       const legendItems = [
@@ -1331,17 +1332,10 @@
       }, 600);
     }
 
-    function updateHzDisplay() {
-      const tuning = getTuning();
-      const baseHz = 261.63 * Math.pow(2, tuning / 12);
-      document.getElementById('hzDisplay').textContent = baseHz.toFixed(1) + ' Hz';
-    }
-
     document.getElementById('tuningSlider').addEventListener('input', (e) => {
       const semitones = parseFloat(e.target.value);
       setTuning(semitones);
-      updateHzDisplay();
-      // Re-parse notes with new tuning (frequencies are calculated at parse time)
+      // Re-parse notes with new tuning and redraw (Hz shown on canvas)
       document.getElementById('presetSelect').dispatchEvent(new Event('change'));
       // Play preview tone
       playTuningPreview(semitones);
