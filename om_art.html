@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The OM Project</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+  <script src="om_audio_engine.js"></script>
+  <script src="om_presets.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      /* Earth/Wabi-sabi palette */
+      --bg: #faf7f2;           /* warm rice paper */
+      --panel-bg: #2a2826;     /* ink stone charcoal */
+      --accent: #9a8a78;       /* warm bronze */
+      --accent-dark: #6b5d4d;  /* deep bronze */
+      --text-primary: #3a3632; /* warm dark */
+      --text-muted: #8a7d6d;   /* muted bronze */
+      --border: #e0dbd4;       /* warm gray border */
+      --frame-bg: #f0ebe4;     /* slightly darker paper */
+      --frame-border: #c4bbb0; /* stone border */
+      --frame-accent: #a89f94; /* stone accent */
+      /* Voice colors - earth tones */
+      --tlk-color: #7a8085;    /* stone gray */
+      --rap-color: #b07060;    /* terracotta */
+      --ydl-color: #6a8a6a;    /* sage */
+      --sng-color: #8a7090;    /* dusty plum */
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Top Bar */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      flex-shrink: 0;
+    }
+
+    .title {
+      font-size: 20px;
+      font-weight: 300;
+      letter-spacing: 0.5px;
+    }
+
+    .top-controls {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .preset-select {
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+      font-size: 13px;
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text-primary);
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .preset-select:hover {
+      border-color: var(--accent);
+    }
+
+    /* Volume control */
+    .volume-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .volume-control label {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .volume-slider {
+      width: 80px;
+      height: 4px;
+      -webkit-appearance: none;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+
+    .volume-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      background: var(--accent-dark);
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    /* Main Content */
+    .main-content {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* Left Panel - Notes List */
+    .notes-panel {
+      width: 240px;
+      min-width: 240px;
+      max-width: 240px;
+      border-right: 1px solid #3a3836;
+      background: var(--panel-bg);
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 12px 0;
+      flex-shrink: 0;
+    }
+
+    .segment-header {
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      color: #c4b8a8;  /* warm sand - harmonizes with earth palette */
+      padding: 12px 12px 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .note-item {
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+      font-size: 9px;
+      padding: 3px 12px;
+      color: #ffffff;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+      line-height: 1.4;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Intensity based on trajectory - inline styles set background */
+    .note-item:hover {
+      filter: brightness(1.3);
+    }
+
+    .note-item.playing {
+      filter: brightness(1.5);
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,0.5);
+    }
+
+    /* Visualization Canvas */
+    .visualization {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: var(--bg);
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .canvas-container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    #canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Bottom Controls */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      background: var(--bg);
+      flex-shrink: 0;
+    }
+
+    .play-btn {
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 50%;
+      background: var(--accent-dark);
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s, transform 0.1s;
+      flex-shrink: 0;
+    }
+
+    .play-btn:hover {
+      background: var(--accent);
+    }
+
+    .play-btn:active {
+      transform: scale(0.95);
+    }
+
+    .play-btn svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+
+    .timeline-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .timeline {
+      flex: 1;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      cursor: pointer;
+      position: relative;
+      overflow: visible;
+    }
+
+    .timeline-progress {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 3px;
+      width: 0%;
+      transition: width 0.05s linear;
+    }
+
+    .timeline-handle {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 14px;
+      height: 14px;
+      background: var(--accent-dark);
+      border-radius: 50%;
+      cursor: grab;
+      opacity: 1;
+      transition: opacity 0.2s;
+    }
+
+    .timeline-handle:active {
+      cursor: grabbing;
+    }
+
+    .time-display {
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+      font-size: 12px;
+      color: var(--text-muted);
+      min-width: 80px;
+      flex-shrink: 0;
+    }
+
+    .speed-select {
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+      font-size: 12px;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg);
+      color: var(--text-primary);
+      cursor: pointer;
+      outline: none;
+      flex-shrink: 0;
+    }
+
+    /* Segment markers on timeline */
+    .segment-marker {
+      position: absolute;
+      top: -8px;
+      width: 1px;
+      height: 22px;
+      background: var(--frame-border);
+      pointer-events: none;
+    }
+
+    .segment-marker::after {
+      content: attr(data-label);
+      position: absolute;
+      top: -16px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+      font-size: 9px;
+      color: var(--text-muted);
+    }
+
+    /* Legend */
+    .legend {
+      display: flex;
+      gap: 16px;
+      font-size: 11px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .legend-dot {
+      width: 24px;
+      height: 12px;
+      border-radius: 2px;
+    }
+
+    /* Scrollbar styling */
+    .notes-panel::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .notes-panel::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .notes-panel::-webkit-scrollbar-thumb {
+      background: #4a4644;
+      border-radius: 3px;
+    }
+
+    .notes-panel::-webkit-scrollbar-thumb:hover {
+      background: #5a5654;
+    }
+  </style>
+</head>
+<body>
+  <!-- Top Bar -->
+  <div class="top-bar">
+    <div class="title">The OM Project</div>
+    <div class="top-controls">
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background: #7a8085"></div>tlk</div>
+        <div class="legend-item"><div class="legend-dot" style="background: #b07060"></div>rap</div>
+        <div class="legend-item"><div class="legend-dot" style="background: #6a8a6a"></div>ydl</div>
+        <div class="legend-item"><div class="legend-dot" style="background: #8a7090"></div>sng</div>
+      </div>
+      <div class="volume-control">
+        <label>Vol</label>
+        <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="75">
+      </div>
+      <select class="preset-select" id="presetSelect">
+        <option value="smad">smad</option>
+        <option value="nndl">nndl</option>
+        <option value="grat">grat</option>
+        <option value="meta">meta</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <!-- Notes Panel -->
+    <div class="notes-panel" id="notesPanel">
+      <!-- Populated by JS -->
+    </div>
+
+    <!-- Visualization -->
+    <div class="visualization">
+      <div class="canvas-container">
+        <canvas id="canvas"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Controls -->
+  <div class="controls">
+    <button class="play-btn" id="playBtn">
+      <svg viewBox="0 0 24 24" id="playIcon">
+        <path d="M8 5v14l11-7z"/>
+      </svg>
+    </button>
+    <div class="timeline-container">
+      <div class="timeline" id="timeline">
+        <div class="timeline-progress" id="timelineProgress"></div>
+        <div class="timeline-handle" id="timelineHandle"></div>
+      </div>
+      <div class="time-display" id="timeDisplay">0:00 / 0:00</div>
+    </div>
+    <select class="speed-select" id="speedSelect">
+      <option value="0.5">0.5x</option>
+      <option value="0.75">0.75x</option>
+      <option value="1" selected>1x</option>
+      <option value="1.5">1.5x</option>
+      <option value="2">2x</option>
+    </select>
+  </div>
+
+  <script>
+    // ========== OM PRESETS and VOICE_COLORS loaded from om_presets.js ==========
+
+    // ========== STATE ==========
+    let parsedGroups = {};
+    let allNotes = [];
+    let isPlaying = false;
+    let currentNoteIndex = 0;
+    let playbackTimeout = null;
+    let baseDuration = OM_DEFAULTS.duration;
+    let playbackSpeed = 1;
+    let startTime = 0;
+    let pausedAt = 0;
+    let playedSegments = [];
+    let volume = OM_DEFAULTS.defaultVolume; // dB
+    let masterVolume = null;
+
+    // ========== PARSING (uses om_audio_engine.js) ==========
+    // parseVoiceSpec and parseOMInput are loaded from om_audio_engine.js
+
+    // ========== NOTES PANEL ==========
+    function renderNotesPanel() {
+      const panel = document.getElementById('notesPanel');
+      panel.innerHTML = '';
+
+      const groupOrder = ['A1', 'A2', 'A3', 'A4', 'U1', 'U2', 'M1', 'M2'];
+      let noteIndex = 0;
+
+      for (const groupName of groupOrder) {
+        if (!parsedGroups[groupName]) continue;
+        const notes = parsedGroups[groupName];
+
+        const header = document.createElement('div');
+        header.className = 'segment-header';
+        header.textContent = `${groupName} (${notes.length})`;
+        panel.appendChild(header);
+
+        for (const note of notes) {
+          const item = document.createElement('div');
+          item.className = 'note-item';
+          item.dataset.index = noteIndex;
+
+          // Calculate intensity based on distance from C (trajectory 0)
+          // Notes at C are lighter, notes further away are darker/more intense
+          const trajMagnitude = Math.abs(note.trajStart);
+          const intensity = Math.min(1, trajMagnitude / 0.8); // 0 at C, 1 at max distance
+
+          // Base colors for each voice type (earth tones)
+          const baseColors = {
+            tlk: { r: 122, g: 128, b: 133 },  // stone gray #7a8085
+            rap: { r: 176, g: 112, b: 96 },   // terracotta #b07060
+            ydl: { r: 106, g: 138, b: 106 },  // sage #6a8a6a
+            sng: { r: 138, g: 112, b: 144 }   // dusty plum #8a7090
+          };
+
+          const base = baseColors[note.voiceType] || baseColors.tlk;
+          // Darken based on intensity (further from C = darker)
+          const darken = intensity * 40;
+          const r = Math.max(0, Math.round(base.r - darken));
+          const g = Math.max(0, Math.round(base.g - darken));
+          const b = Math.max(0, Math.round(base.b - darken));
+
+          item.style.background = `rgb(${r}, ${g}, ${b})`;
+
+          const trajStr = note.trajStart >= 0 ? `+${note.trajStart.toFixed(2)}` : note.trajStart.toFixed(2);
+          const freqStr = note.frequency.toFixed(2);
+
+          item.textContent = `${note.voiceType}_${note.mode}/${note.register}/${note.articulation}/${note.noteName}:${trajStr} ${freqStr}Hz`;
+
+          item.addEventListener('click', () => playSingleNote(note));
+          panel.appendChild(item);
+          noteIndex++;
+        }
+      }
+    }
+
+    // ========== AUDIO (uses om_audio_engine.js) ==========
+    let currentSynthObj = null;
+
+    // Single note playback (for clicking on notes)
+    async function playSingleNote(note) {
+      try {
+        await Tone.start();
+        if (currentSynthObj) {
+          try { currentSynthObj.dispose(); } catch(e) {}
+          currentSynthObj = null;
+        }
+        const duration = Math.max(0.5, (baseDuration / Math.max(1, allNotes.length)) / playbackSpeed);
+        // Single click is 6dB quieter to match perceived playback level (playback has overlapping notes)
+        currentSynthObj = createSynth(note, volume - 6);
+        currentSynthObj.synth.triggerAttackRelease(note.startFrequency, duration, undefined, calculateVelocity(note));
+      } catch (e) {
+        console.error('Audio error:', e);
+      }
+    }
+
+    // ========== VISUALIZATION ==========
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      const container = document.querySelector('.canvas-container');
+      const rect = container.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
+
+      drawVisualization();
+    }
+
+    function trajectoryToY(traj, height, padding) {
+      const minTraj = -0.8;
+      const maxTraj = 0.2;
+      const range = maxTraj - minTraj;
+      // Invert: high trajectory = top of canvas (low Y), low trajectory = bottom
+      const normalized = (maxTraj - traj) / range;
+      return padding + normalized * (height - 2 * padding);
+    }
+
+    function drawVisualization() {
+      const container = document.querySelector('.canvas-container');
+      const rect = container.getBoundingClientRect();
+      const canvasWidth = rect.width;
+      const canvasHeight = rect.height;
+
+      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+      if (allNotes.length === 0) {
+        ctx.fillStyle = '#8a7d6d';  // muted bronze
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Select a preset to begin', canvasWidth / 2, canvasHeight / 2);
+        return;
+      }
+
+      // Fixed aspect ratio for graph (width:height = 4:1, max height 200px)
+      const maxGraphHeight = 200;
+      const aspectRatio = 4;
+      const padding = 40;
+
+      // Calculate graph dimensions
+      let graphWidth = canvasWidth - 2 * padding;
+      let graphHeight = graphWidth / aspectRatio;
+
+      // Clamp to max height
+      if (graphHeight > maxGraphHeight) {
+        graphHeight = maxGraphHeight;
+        graphWidth = graphHeight * aspectRatio;
+      }
+
+      // Also ensure it fits in available canvas height
+      if (graphHeight > canvasHeight - 2 * padding - 30) {
+        graphHeight = canvasHeight - 2 * padding - 30;
+        graphWidth = graphHeight * aspectRatio;
+      }
+
+      // Center the graph in the canvas
+      const offsetX = (canvasWidth - graphWidth) / 2;
+      const offsetY = (canvasHeight - graphHeight) / 2 - 15; // slight upward shift for labels
+
+      // Helper to convert trajectory to Y within graph bounds
+      const graphTrajectoryToY = (traj) => {
+        const minTraj = -0.8;
+        const maxTraj = 0.8;  // symmetric around C (0)
+        const range = maxTraj - minTraj;
+        const normalized = (maxTraj - traj) / range;
+        return offsetY + normalized * graphHeight;
+      };
+
+      // Draw decorative frame around graph area
+      const framePadding = 20;
+      const frameTopPadding = 20; // same as sides
+      const frameX = offsetX - framePadding;
+      const frameY = offsetY - frameTopPadding;
+      const frameW = graphWidth + framePadding * 2;
+      const frameH = graphHeight + frameTopPadding + framePadding + 30; // extra for labels
+
+      // Subtle inner background
+      ctx.fillStyle = '#f0ebe4';  // warm paper
+      ctx.beginPath();
+      ctx.roundRect(frameX, frameY, frameW, frameH, 8);
+      ctx.fill();
+
+      // Frame border
+      ctx.strokeStyle = '#c4bbb0';  // stone border
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(frameX, frameY, frameW, frameH, 8);
+      ctx.stroke();
+
+      // Corner accents
+      const accentSize = 12;
+      ctx.strokeStyle = '#a89f94';  // stone accent
+      ctx.lineWidth = 2;
+      // Top-left
+      ctx.beginPath();
+      ctx.moveTo(frameX + 4, frameY + accentSize);
+      ctx.lineTo(frameX + 4, frameY + 4);
+      ctx.lineTo(frameX + accentSize, frameY + 4);
+      ctx.stroke();
+      // Top-right
+      ctx.beginPath();
+      ctx.moveTo(frameX + frameW - accentSize, frameY + 4);
+      ctx.lineTo(frameX + frameW - 4, frameY + 4);
+      ctx.lineTo(frameX + frameW - 4, frameY + accentSize);
+      ctx.stroke();
+      // Bottom-left
+      ctx.beginPath();
+      ctx.moveTo(frameX + 4, frameY + frameH - accentSize);
+      ctx.lineTo(frameX + 4, frameY + frameH - 4);
+      ctx.lineTo(frameX + accentSize, frameY + frameH - 4);
+      ctx.stroke();
+      // Bottom-right
+      ctx.beginPath();
+      ctx.moveTo(frameX + frameW - accentSize, frameY + frameH - 4);
+      ctx.lineTo(frameX + frameW - 4, frameY + frameH - 4);
+      ctx.lineTo(frameX + frameW - 4, frameY + frameH - accentSize);
+      ctx.stroke();
+
+      // Draw baseline C (trajectory = 0) - solid line
+      const baselineY = graphTrajectoryToY(0);
+      ctx.strokeStyle = '#6b5d4d';  // deep bronze
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(offsetX, baselineY);
+      ctx.lineTo(offsetX + graphWidth, baselineY);
+      ctx.stroke();
+
+      // Label for baseline (different color from lines)
+      ctx.fillStyle = '#8a7d6d';  // muted bronze
+      ctx.font = '10px SF Mono, Monaco, monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText('C', offsetX - 8, baselineY + 3);
+
+      // Draw VBR guide curve with smooth bezier interpolation
+      // Get VBR notes with their actual indices in allNotes
+      let vbrNotesWithIndex = allNotes
+        .map((n, idx) => ({ note: n, index: idx }))
+        .filter(item => item.note.articulation === 'vbr');
+
+      if (vbrNotesWithIndex.length > 1) {
+        // Get points for the curve using actual positions in allNotes
+        const points = vbrNotesWithIndex.map(item => ({
+          x: offsetX + (item.index / Math.max(1, allNotes.length - 1)) * graphWidth,
+          y: graphTrajectoryToY(item.note.trajStart)
+        }));
+
+        ctx.strokeStyle = '#6b5d4d';  // deep bronze
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+
+        // Draw smooth curve using quadratic bezier through points
+        for (let i = 0; i < points.length - 1; i++) {
+          const p0 = points[i];
+          const p1 = points[i + 1];
+
+          if (i === 0) {
+            // First segment: just curve toward midpoint
+            const midX = (p0.x + p1.x) / 2;
+            const midY = (p0.y + p1.y) / 2;
+            ctx.quadraticCurveTo(p0.x + (p1.x - p0.x) * 0.5, p0.y, midX, midY);
+          } else if (i === points.length - 2) {
+            // Last segment: curve to end
+            ctx.quadraticCurveTo(p0.x + (p1.x - p0.x) * 0.5, p1.y, p1.x, p1.y);
+          } else {
+            // Middle segments: smooth curve through midpoints
+            const midX = (p0.x + p1.x) / 2;
+            const midY = (p0.y + p1.y) / 2;
+            ctx.quadraticCurveTo(p0.x, p0.y, midX, midY);
+          }
+        }
+        ctx.stroke();
+      }
+
+      // Draw played segments (morse code effect)
+      // All notes positioned by their index in allNotes for consistent X spacing
+      const segmentWidth = Math.max(4, graphWidth / allNotes.length);
+      for (const segment of playedSegments) {
+        const note = segment.note;
+        const color = VOICE_COLORS[note.voiceType];
+
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.9;
+
+        // All notes use same X positioning based on index in allNotes
+        const x = offsetX + (segment.index / Math.max(1, allNotes.length - 1)) * graphWidth;
+        const y = graphTrajectoryToY(note.trajStart);
+
+        if (note.articulation === 'vbr') {
+          // Vibrato notes as circles
+          ctx.beginPath();
+          ctx.arc(x, y, 4, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // Solid notes as rectangles
+          ctx.fillRect(x - segmentWidth/2, y - 3, segmentWidth, 6);
+        }
+
+        ctx.globalAlpha = 1;
+      }
+
+      // Draw current position indicator
+      if (isPlaying && currentNoteIndex < allNotes.length) {
+        const x = offsetX + (currentNoteIndex / allNotes.length) * graphWidth;
+        ctx.strokeStyle = '#9a8a78';  // warm bronze
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, offsetY - 10);
+        ctx.lineTo(x, offsetY + graphHeight + 10);
+        ctx.stroke();
+      }
+
+      // Draw segment labels (muted bronze)
+      ctx.fillStyle = '#8a7d6d';
+      ctx.font = '9px SF Mono, Monaco, monospace';
+      ctx.textAlign = 'center';
+
+      const segments = ['A1', 'A2', 'A3', 'A4', 'U1', 'U2', 'M1', 'M2'];
+      let noteCount = 0;
+      for (const seg of segments) {
+        if (parsedGroups[seg]) {
+          const startX = offsetX + (noteCount / allNotes.length) * graphWidth;
+          const segNotes = parsedGroups[seg].length;
+          const midX = startX + (segNotes / allNotes.length) * graphWidth / 2;
+          ctx.fillText(seg, midX, offsetY + graphHeight + 25);
+          noteCount += segNotes;
+        }
+      }
+    }
+
+    // ========== PLAYBACK ==========
+    function updateTimeDisplay() {
+      const totalDuration = baseDuration / playbackSpeed;
+      const currentTime = isPlaying ?
+        (Date.now() - startTime) / 1000 :
+        pausedAt / 1000;
+
+      const formatTime = (s) => {
+        const mins = Math.floor(s / 60);
+        const secs = Math.floor(s % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+      };
+
+      document.getElementById('timeDisplay').textContent =
+        `${formatTime(Math.min(currentTime, totalDuration))} / ${formatTime(totalDuration)}`;
+    }
+
+    function updateTimeline() {
+      const progress = currentNoteIndex / allNotes.length * 100;
+      document.getElementById('timelineProgress').style.width = `${progress}%`;
+      document.getElementById('timelineHandle').style.left = `${progress}%`;
+    }
+
+    async function startPlayback() {
+      if (allNotes.length === 0) return;
+
+      await Tone.start();
+
+      // Reset transport
+      Tone.Transport.stop();
+      Tone.Transport.cancel();
+      Tone.Transport.position = 0;
+
+      // If at or near the end, start from beginning
+      if (currentNoteIndex >= allNotes.length - 1) {
+        currentNoteIndex = 0;
+        playedSegments = [];
+      }
+
+      const startIndex = currentNoteIndex;
+      isPlaying = true;
+      startTime = Date.now();
+
+      // Scroll to current note
+      const notesPanel = document.querySelector('.notes-panel');
+      const startNoteItem = document.querySelector(`.note-item[data-index="${startIndex}"]`);
+      if (notesPanel && startNoteItem) {
+        startNoteItem.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+      }
+
+      // Highlight starting note
+      document.querySelectorAll('.note-item.playing').forEach(el => el.classList.remove('playing'));
+      if (startNoteItem) startNoteItem.classList.add('playing');
+
+      document.getElementById('playIcon').innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+
+      const totalDuration = baseDuration / playbackSpeed;
+      const noteCount = allNotes.length;
+      const noteDuration = totalDuration / noteCount;
+      const noteSoundDuration = noteDuration * OM_DEFAULTS.overlapRatio;
+
+      // Schedule notes from current position using Transport
+      for (let i = startIndex; i < noteCount; i++) {
+        const note = allNotes[i];
+        const noteTime = (i - startIndex) * noteDuration; // Time relative to start position
+
+        Tone.Transport.schedule((time) => {
+          // Play the note using shared engine function
+          playNoteScheduled(note, noteSoundDuration, time, volume);
+
+          // Update UI
+          Tone.Draw.schedule(() => {
+            currentNoteIndex = i;
+            playedSegments = allNotes.slice(0, i + 1).map((n, idx) => ({ note: n, index: idx }));
+
+            document.querySelectorAll('.note-item.playing').forEach(el => el.classList.remove('playing'));
+            const noteItem = document.querySelector(`.note-item[data-index="${i}"]`);
+            if (noteItem) {
+              noteItem.classList.add('playing');
+              // Use instant scroll at higher speeds to avoid animation backup
+              noteItem.scrollIntoView({ behavior: playbackSpeed > 1 ? 'auto' : 'smooth', block: 'nearest' });
+            }
+
+            updateTimeline();
+            drawVisualization();
+          }, time);
+        }, noteTime);
+      }
+
+      Tone.Transport.start();
+
+      // Stop when done (but keep the visualization)
+      const remainingDuration = (noteCount - startIndex) * noteDuration;
+      if (playbackTimeout) clearTimeout(playbackTimeout);
+      playbackTimeout = setTimeout(() => {
+        if (isPlaying) finishPlayback();
+      }, (remainingDuration + 1) * 1000);
+    }
+
+    function finishPlayback() {
+      // Stop playback but preserve the visualization
+      isPlaying = false;
+      if (playbackTimeout) {
+        clearTimeout(playbackTimeout);
+        playbackTimeout = null;
+      }
+      Tone.Transport.stop();
+      Tone.Transport.cancel();
+      Tone.Transport.position = 0;
+
+      if (currentSynthObj) {
+        try { currentSynthObj.dispose(); } catch(e) {}
+        currentSynthObj = null;
+      }
+
+      document.getElementById('playIcon').innerHTML = '<path d="M8 5v14l11-7z"/>';
+      document.querySelectorAll('.note-item.playing').forEach(el => el.classList.remove('playing'));
+    }
+
+    function stopPlayback() {
+      isPlaying = false;
+      if (playbackTimeout) {
+        clearTimeout(playbackTimeout);
+        playbackTimeout = null;
+      }
+
+      // Stop Transport and clear scheduled events
+      Tone.Transport.stop();
+      Tone.Transport.cancel();
+      Tone.Transport.position = 0;
+
+      if (currentSynthObj) {
+        try { currentSynthObj.dispose(); } catch(e) {}
+        currentSynthObj = null;
+      }
+
+      document.getElementById('playIcon').innerHTML = '<path d="M8 5v14l11-7z"/>';
+    }
+
+    function resetPlayback() {
+      stopPlayback();
+      currentNoteIndex = 0;
+      pausedAt = 0;
+      playedSegments = [];
+      updateTimeline();
+      updateTimeDisplay();
+      drawVisualization();
+
+      document.querySelectorAll('.note-item.playing').forEach(el => el.classList.remove('playing'));
+    }
+
+    // ========== EVENT HANDLERS ==========
+    // Timeline seeking (click and drag)
+    const timeline = document.getElementById('timeline');
+    let isDragging = false;
+
+    function seekToPosition(e) {
+      const rect = timeline.getBoundingClientRect();
+      const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const noteIndex = Math.floor(percent * allNotes.length);
+
+      // Stop current playback
+      if (isPlaying) {
+        stopPlayback();
+      }
+
+      // Update position
+      currentNoteIndex = noteIndex;
+      playedSegments = allNotes.slice(0, noteIndex).map((n, idx) => ({ note: n, index: idx }));
+      updateTimeline();
+      drawVisualization();
+
+      // Update highlighted note in panel
+      document.querySelectorAll('.note-item.playing').forEach(el => el.classList.remove('playing'));
+      const noteItem = document.querySelector(`.note-item[data-index="${noteIndex}"]`);
+      if (noteItem) {
+        noteItem.classList.add('playing');
+        noteItem.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+      }
+    }
+
+    timeline.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      seekToPosition(e);
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (isDragging) {
+        seekToPosition(e);
+      }
+    });
+
+    document.addEventListener('mouseup', () => {
+      isDragging = false;
+    });
+
+    function addSegmentMarkers() {
+      const timeline = document.getElementById('timeline');
+      timeline.querySelectorAll('.segment-marker').forEach(m => m.remove());
+
+      if (allNotes.length === 0) return;
+
+      const segments = ['A1', 'A2', 'A3', 'A4', 'U1', 'U2', 'M1', 'M2'];
+      let noteCount = 0;
+
+      for (const seg of segments) {
+        if (parsedGroups[seg] && noteCount > 0) {
+          const percent = (noteCount / allNotes.length) * 100;
+          const marker = document.createElement('div');
+          marker.className = 'segment-marker';
+          marker.style.left = `${percent}%`;
+          marker.dataset.label = seg;
+          timeline.appendChild(marker);
+        }
+        if (parsedGroups[seg]) {
+          noteCount += parsedGroups[seg].length;
+        }
+      }
+    }
+
+    document.getElementById('playBtn').addEventListener('click', () => {
+      if (isPlaying) {
+        stopPlayback();
+      } else {
+        startPlayback();
+      }
+    });
+
+    document.getElementById('speedSelect').addEventListener('change', (e) => {
+      playbackSpeed = parseFloat(e.target.value);
+      updateTimeDisplay();
+    });
+
+    document.getElementById('volumeSlider').addEventListener('input', (e) => {
+      volume = (e.target.value / 100) * 48 - 24; // Map 0-100 to -24 to +24 dB
+    });
+
+    document.getElementById('presetSelect').addEventListener('change', (e) => {
+      resetPlayback();
+      const preset = e.target.value;
+      // Use the shared engine's parseOMInput function
+      parsedGroups = parseOMInput(OM_PRESETS[preset]);
+
+      allNotes = [];
+      const groupOrder = ['A1', 'A2', 'A3', 'A4', 'U1', 'U2', 'M1', 'M2'];
+      for (const g of groupOrder) {
+        if (parsedGroups[g]) allNotes.push(...parsedGroups[g]);
+      }
+
+      renderNotesPanel();
+      addSegmentMarkers();
+      drawVisualization();
+      updateTimeDisplay();
+
+      // Scroll notes panel to top
+      const notesPanel = document.querySelector('.notes-panel');
+      if (notesPanel) notesPanel.scrollTop = 0;
+    });
+
+    // ========== INIT ==========
+    window.addEventListener('resize', resizeCanvas);
+
+    // Initialize
+    document.getElementById('presetSelect').dispatchEvent(new Event('change'));
+    setTimeout(resizeCanvas, 0);
+  </script>
+</body>
+</html>

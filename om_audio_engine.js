@@ -1,0 +1,507 @@
+/**
+ * OM Audio Engine - Shared audio synthesis for OM visualization tools
+ * Requires Tone.js to be loaded first
+ */
+
+// White key semitone offsets from C (c1=C, c2=D, c3=E, c4=F, c5=G, c6=A, c7=B, c8=C+octave)
+const WHITE_KEY_SEMITONES = {
+  1: 0,   // C
+  2: 2,   // D
+  3: 4,   // E
+  4: 5,   // F
+  5: 7,   // G
+  6: 9,   // A
+  7: 11,  // B
+  8: 12   // C (next octave)
+};
+
+const SEMITONE_TO_NOTE = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+// OM playback defaults
+const OM_DEFAULTS = {
+  duration: 6,        // Total duration in seconds at 1x speed
+  overlapRatio: 1.8,  // Note overlap for blending effect
+  defaultVolume: 18   // Default volume in dB
+};
+
+/**
+ * Calculate velocity based on trajectory magnitude
+ */
+function calculateVelocity(note) {
+  const trajMagnitude = Math.max(Math.abs(note.trajStart || 0), Math.abs(note.trajEnd || 0));
+  return Math.max(0.1, Math.min(1, 0.6 + trajMagnitude * 0.2));
+}
+
+/**
+ * Play a note with Transport scheduling (for precise timing)
+ * @param {Object} note - The note object from parseVoiceSpec
+ * @param {number} duration - Duration in seconds
+ * @param {number} time - Tone.Transport time
+ * @param {number} volumeDb - Volume in dB
+ * @returns {Object} synthObj for manual disposal if needed
+ */
+function playNoteScheduled(note, duration, time, volumeDb = 0) {
+  const synthObj = createSynth(note, volumeDb);
+  const velocity = calculateVelocity(note);
+  synthObj.synth.triggerAttackRelease(note.startFrequency, duration, time, velocity);
+
+  // Calculate when the note actually starts relative to now (for timeouts)
+  const startDelayMs = Math.max(0, (time - Tone.now()) * 1000);
+
+  // Frequency glide if needed
+  if (note.startFrequency !== note.endFrequency) {
+    setTimeout(() => {
+      try {
+        synthObj.synth.frequency.rampTo(note.endFrequency, duration * 0.8);
+      } catch (e) {}
+    }, startDelayMs + 50);
+  }
+
+  // Auto-cleanup after note finishes (start delay + duration + release buffer)
+  const cleanupDelay = startDelayMs + (duration + 2) * 1000;
+  setTimeout(() => { try { synthObj.dispose(); } catch(e) {} }, cleanupDelay);
+
+  return synthObj;
+}
+
+// Formant settings based on analysis of actual OM recordings
+const FORMANTS = {
+  'A': {  // "aah" - open vowel
+    f1: { freq: 500, gain: 6 },
+    f2: { freq: 1000, gain: 4 }
+  },
+  'U': {  // "ooh" - rounded vowel
+    f1: { freq: 500, gain: 6 },
+    f2: { freq: 1200, gain: -2 }
+  },
+  'M': {  // "mmm" - nasal hum
+    f1: { freq: 300, gain: 4 },
+    f2: { freq: 800, gain: -6 }
+  }
+};
+
+/**
+ * Parse a voice spec like v/tlk_nrm/mdl/vbr/ol1/c1/sh8[-0.66]
+ */
+function parseVoiceSpec(spec) {
+  // Try parsing with scale position (sl1-sl8 or sh1-sh8)
+  let match = spec.match(/v\/(\w+)_(\w+)\/(\w+)\/(\w+)\/ol(\d)\/(\w)(\d)\/(s[lh])(\d)(?:\[([-\d.:]+)\])?/);
+
+  if (!match) {
+    // Fallback: old format with just sh8
+    match = spec.match(/v\/(\w+)_(\w+)\/(\w+)\/(\w+)\/ol(\d)\/(\w)(\d)\/sh(\d)(?:\[([-\d.:]+)\])?/);
+    if (match) {
+      const [_, voiceType, mode, register, articulation, octaveLayer, pitchClass, pitchNum, scaleNum, arg] = match;
+      return buildNote(spec, voiceType, mode, register, articulation, octaveLayer, pitchClass, pitchNum, 'sh', scaleNum, arg);
+    }
+    return null;
+  }
+
+  const [_, voiceType, mode, register, articulation, octaveLayer, pitchClass, pitchNum, scaleType, scaleNum, arg] = match;
+  return buildNote(spec, voiceType, mode, register, articulation, octaveLayer, pitchClass, pitchNum, scaleType, scaleNum, arg);
+}
+
+function buildNote(spec, voiceType, mode, register, articulation, octaveLayer, pitchClass, pitchNum, scaleType, scaleNum, arg) {
+  const baseOctave = parseInt(octaveLayer);
+  const whiteKeyOffset = WHITE_KEY_SEMITONES[parseInt(pitchNum)] || 0;
+  const scaleWhiteKey = WHITE_KEY_SEMITONES[parseInt(scaleNum)] || 0;
+  const scaleOffset = scaleType === 'sh' ? scaleWhiteKey + 12 : scaleWhiteKey;
+
+  let totalSemitones = whiteKeyOffset + scaleOffset;
+
+  // Falsetto shifts up an octave
+  if (register === 'fls') {
+    totalSemitones += 12;
+  }
+
+  const extraOctaves = Math.floor(totalSemitones / 12);
+  const semitoneInOctave = totalSemitones % 12;
+  const finalOctave = baseOctave + extraOctaves;
+  const noteName = SEMITONE_TO_NOTE[semitoneInOctave];
+
+  // Parse trajectory (supports range format "start:end")
+  let trajStart = 0, trajEnd = 0;
+  if (arg) {
+    if (arg.includes(':')) {
+      const [s, e] = arg.split(':').map(parseFloat);
+      trajStart = s;
+      trajEnd = e;
+    } else {
+      trajStart = trajEnd = parseFloat(arg);
+    }
+  }
+
+  const trajStartSemitones = trajStart * 2;
+  const trajEndSemitones = trajEnd * 2;
+
+  // Calculate frequencies
+  const baseSemitonesFromC4 = (finalOctave - 4) * 12 + semitoneInOctave;
+  const startFrequency = 261.63 * Math.pow(2, (baseSemitonesFromC4 + trajStartSemitones) / 12);
+  const endFrequency = 261.63 * Math.pow(2, (baseSemitonesFromC4 + trajEndSemitones) / 12);
+
+  return {
+    raw: spec,
+    voiceType,
+    mode,
+    register,
+    articulation,
+    octaveLayer: parseInt(octaveLayer),
+    pitchClass: pitchClass.toUpperCase(),
+    pitchNum: parseInt(pitchNum),
+    scaleType,
+    scaleNum: parseInt(scaleNum),
+    trajStart,
+    trajEnd,
+    trajStartSemitones,
+    trajEndSemitones,
+    noteName: `${noteName}${finalOctave}`,
+    startFrequency,
+    endFrequency,
+    frequency: startFrequency,
+    octave: finalOctave
+  };
+}
+
+/**
+ * Parse OM preset text into groups
+ */
+function parseOMInput(text) {
+  const groups = {};
+  const lines = text.trim().split('\n');
+
+  for (const line of lines) {
+    const groupMatch = line.match(/^(\w+):\s*(.+)$/);
+    if (groupMatch) {
+      const [_, groupName, notesStr] = groupMatch;
+      const specs = notesStr.split(/\s*\+\s*/).map(s => s.trim()).filter(s => s);
+      const notes = specs.map(parseVoiceSpec).filter(n => n);
+      notes.forEach(n => {
+        n.group = groupName;
+        n.section = groupName.charAt(0).toUpperCase();
+      });
+      if (notes.length > 0) {
+        groups[groupName] = notes;
+      }
+    }
+  }
+  return groups;
+}
+
+/**
+ * Create formant filters for A-U-M vowel character
+ */
+function createFormantFilters(section) {
+  const formant = FORMANTS[section] || FORMANTS['A'];
+
+  const f1 = new Tone.Filter({
+    frequency: formant.f1.freq,
+    type: 'peaking',
+    gain: formant.f1.gain,
+    Q: 2
+  });
+
+  const f2 = new Tone.Filter({
+    frequency: formant.f2.freq,
+    type: 'peaking',
+    gain: formant.f2.gain,
+    Q: 2
+  });
+
+  f1.connect(f2);
+
+  return {
+    input: f1,
+    output: f2,
+    dispose: () => {
+      f1.dispose();
+      f2.dispose();
+    }
+  };
+}
+
+/**
+ * Create synth based on voice type, mode, register, and articulation
+ */
+function createSynth(note, volumeDb = -6) {
+  const { voiceType, mode, register, articulation, section } = note;
+  const isOperatic = mode === 'opr';
+  const isFalsetto = register === 'fls';
+  const isVibrato = articulation === 'vbr';
+
+  let synth;
+  const effects = [];
+  let formantFilters = null;
+
+  // Synth settings per voice type with slow OM-appropriate envelopes
+  switch (voiceType) {
+    case 'sng':
+      synth = new Tone.FMSynth({
+        harmonicity: isFalsetto ? 4 : 3,
+        modulationIndex: isFalsetto ? (isOperatic ? 6 : 4) : (isOperatic ? 12 : 8),
+        oscillator: { type: isFalsetto ? 'triangle' : 'sine' },
+        envelope: { attack: 1.2, decay: 0.3, sustain: 0.85, release: 0.8 },
+        modulation: { type: 'sine' },
+        modulationEnvelope: { attack: 1.0, decay: 0.3, sustain: 0.6, release: 0.6 }
+      });
+      break;
+
+    case 'ydl':
+      synth = new Tone.FMSynth({
+        harmonicity: isFalsetto ? 5 : 3.5,
+        modulationIndex: isFalsetto ? (isOperatic ? 8 : 5) : (isOperatic ? 15 : 10),
+        oscillator: { type: 'triangle' },
+        envelope: { attack: 1.0, decay: 0.2, sustain: 0.8, release: 0.7 },
+        modulation: { type: 'sine' },
+        modulationEnvelope: { attack: 0.8, decay: 0.2, sustain: 0.5, release: 0.5 }
+      });
+      effects.push(new Tone.Chorus({ frequency: 2.5, delayTime: 3, depth: 0.3, wet: 0.3 }).start());
+      break;
+
+    case 'tlk':
+      synth = new Tone.FMSynth({
+        harmonicity: isFalsetto ? 2.5 : 2,
+        modulationIndex: isFalsetto ? 3 : 6,
+        oscillator: { type: 'sine' },
+        envelope: { attack: 0.9, decay: 0.2, sustain: 0.75, release: 0.6 },
+        modulation: { type: 'triangle' },
+        modulationEnvelope: { attack: 0.7, decay: 0.15, sustain: 0.5, release: 0.5 }
+      });
+      break;
+
+    case 'rap':
+      synth = new Tone.FMSynth({
+        harmonicity: isFalsetto ? 3 : 2,
+        modulationIndex: isFalsetto ? 2.5 : 5,
+        oscillator: { type: isFalsetto ? 'triangle' : 'sine' },
+        envelope: { attack: 0.8, decay: 0.2, sustain: 0.7, release: 0.5 },
+        modulation: { type: 'sine' },
+        modulationEnvelope: { attack: 0.6, decay: 0.15, sustain: 0.4, release: 0.4 }
+      });
+      break;
+
+    default:
+      synth = new Tone.FMSynth({
+        harmonicity: 2,
+        modulationIndex: 4,
+        envelope: { attack: 0.8, decay: 0.3, sustain: 0.8, release: 0.6 }
+      });
+  }
+
+  // Falsetto: brighter, airier
+  if (isFalsetto) {
+    effects.push(new Tone.Filter({ frequency: 250, type: 'highpass', rolloff: -12 }));
+    effects.push(new Tone.Filter({ frequency: 2000, type: 'highshelf', gain: 6 }));
+  } else {
+    // Modal: boost volume
+    effects.push(new Tone.Gain(2.0));
+  }
+
+  // Operatic: singer's formant + chest resonance
+  if (isOperatic) {
+    effects.push(new Tone.Filter({ frequency: 2800, type: 'peaking', gain: 8, Q: 3 }));
+    effects.push(new Tone.Filter({ frequency: 400, type: 'peaking', gain: 5, Q: 1.5 }));
+  }
+
+  // Vibrato articulation
+  if (isVibrato) {
+    effects.push(new Tone.Vibrato({ frequency: 5.5, depth: 0.12 }));
+  }
+
+  // Formant filters for A-U-M vowels
+  if (section) {
+    formantFilters = createFormantFilters(section);
+  }
+
+  // Volume control
+  const volume = new Tone.Volume(isFalsetto ? volumeDb - 6 : volumeDb);
+  effects.push(volume);
+
+  // Chain: synth -> effects -> formants -> destination
+  let chain = synth;
+  for (const effect of effects) {
+    chain.connect(effect);
+    chain = effect;
+  }
+
+  if (formantFilters) {
+    chain.connect(formantFilters.input);
+    chain = formantFilters.output;
+  }
+
+  chain.toDestination();
+
+  return {
+    synth,
+    effects,
+    formantFilters,
+    dispose: () => {
+      try {
+        synth.dispose();
+        effects.forEach(e => e.dispose());
+        if (formantFilters) formantFilters.dispose();
+      } catch (e) {
+        // Ignore disposal errors
+      }
+    }
+  };
+}
+
+/**
+ * Play a single note
+ */
+async function playNote(note, durationSec, volumeDb = -6, onFinish = null) {
+  try {
+    await Tone.start();
+
+    const synthObj = createSynth(note, volumeDb);
+    const { synth } = synthObj;
+
+    // Base velocity, slightly varied by trajectory magnitude
+    const trajMagnitude = Math.max(Math.abs(note.trajStart), Math.abs(note.trajEnd));
+    const velocity = 0.6 + trajMagnitude * 0.2;
+
+    synth.triggerAttackRelease(note.startFrequency, durationSec, undefined, Math.max(0.1, Math.min(1, velocity)));
+
+    // Frequency glide if needed
+    if (note.startFrequency !== note.endFrequency) {
+      setTimeout(() => {
+        try {
+          synth.frequency.rampTo(note.endFrequency, durationSec * 0.8);
+        } catch (e) {}
+      }, 50);
+    }
+
+    // Cleanup after note
+    const cleanupDelay = durationSec * 1000 + 800;
+    setTimeout(() => {
+      synthObj.dispose();
+      if (onFinish) onFinish();
+    }, cleanupDelay);
+
+    return synthObj;
+  } catch (e) {
+    console.error('Error playing note:', e);
+    return null;
+  }
+}
+
+/**
+ * OM Audio Player class for managing playback state
+ */
+class OMAudioPlayer {
+  constructor() {
+    this.isPlaying = false;
+    this.currentSynth = null;
+    this.playbackTimeout = null;
+    this.notes = [];
+    this.currentIndex = 0;
+    this.volumeDb = -6;
+    this.onNoteStart = null;
+    this.onPlaybackEnd = null;
+  }
+
+  setVolume(db) {
+    this.volumeDb = db;
+  }
+
+  setNotes(notes) {
+    this.notes = notes;
+    this.currentIndex = 0;
+  }
+
+  async start(totalDurationSec = 12) {
+    if (this.isPlaying || this.notes.length === 0) return;
+
+    await Tone.start();
+    this.isPlaying = true;
+
+    const noteDuration = totalDurationSec / this.notes.length;
+    this._playNext(noteDuration);
+  }
+
+  _playNext(noteDuration) {
+    if (!this.isPlaying || this.currentIndex >= this.notes.length) {
+      this._finish();
+      return;
+    }
+
+    const note = this.notes[this.currentIndex];
+
+    if (this.currentSynth) {
+      this.currentSynth.dispose();
+    }
+
+    this.currentSynth = createSynth(note, this.volumeDb);
+    const trajMagnitude = Math.max(Math.abs(note.trajStart), Math.abs(note.trajEnd));
+    const velocity = 0.6 + trajMagnitude * 0.2;
+
+    this.currentSynth.synth.triggerAttackRelease(
+      note.startFrequency,
+      Math.max(0.1, noteDuration - 0.05),
+      undefined,
+      Math.max(0.1, Math.min(1, velocity))
+    );
+
+    if (this.onNoteStart) {
+      this.onNoteStart(note, this.currentIndex);
+    }
+
+    this.currentIndex++;
+    this.playbackTimeout = setTimeout(() => this._playNext(noteDuration), noteDuration * 1000);
+  }
+
+  stop() {
+    this.isPlaying = false;
+
+    if (this.playbackTimeout) {
+      clearTimeout(this.playbackTimeout);
+      this.playbackTimeout = null;
+    }
+
+    if (this.currentSynth) {
+      this.currentSynth.dispose();
+      this.currentSynth = null;
+    }
+  }
+
+  reset() {
+    this.stop();
+    this.currentIndex = 0;
+  }
+
+  _finish() {
+    this.isPlaying = false;
+    if (this.currentSynth) {
+      this.currentSynth.dispose();
+      this.currentSynth = null;
+    }
+    if (this.onPlaybackEnd) {
+      this.onPlaybackEnd();
+    }
+  }
+
+  seekTo(index) {
+    const wasPlaying = this.isPlaying;
+    this.stop();
+    this.currentIndex = Math.max(0, Math.min(index, this.notes.length));
+    return wasPlaying;
+  }
+}
+
+// Export for use as module or global
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    parseVoiceSpec,
+    parseOMInput,
+    createSynth,
+    createFormantFilters,
+    playNote,
+    playNoteScheduled,
+    calculateVelocity,
+    OMAudioPlayer,
+    FORMANTS,
+    WHITE_KEY_SEMITONES,
+    SEMITONE_TO_NOTE,
+    OM_DEFAULTS
+  };
+}
