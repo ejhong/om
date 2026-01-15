@@ -406,10 +406,6 @@
 
     /* Mobile responsive */
     @media (max-width: 768px) {
-      body {
-        overflow-y: auto; /* Allow scrolling */
-      }
-
       .top-bar {
         padding: 6px 12px;
       }
@@ -422,28 +418,25 @@
         flex-direction: column;
         padding: 8px;
         gap: 8px;
-        min-height: min-content;
       }
 
-      /* Notes panel below graph on mobile */
+      /* Graph takes remaining space after notes panel */
+      .visualization {
+        flex: 1;
+        min-height: 0;
+        order: 1;
+      }
+
+      /* Notes panel fixed height at bottom */
       .notes-panel {
         width: 100%;
         min-width: unset;
         max-width: unset;
-        min-height: 200px;
+        height: 180px;
+        min-height: 180px;
+        max-height: 180px;
         flex-shrink: 0;
         order: 2;
-      }
-
-      .visualization {
-        flex: none;
-        height: auto;
-        min-height: unset;
-        order: 1;
-      }
-
-      .canvas-container {
-        height: 280px; /* Fixed height for graph on mobile */
       }
 
       .player-controls {
@@ -461,9 +454,8 @@
       }
 
       .settings-popup {
-        right: auto;
+        right: 0;
         left: auto;
-        transform: translateX(-60%);
       }
     }
   </style>
