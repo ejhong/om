@@ -654,15 +654,24 @@
     });
 
     // ========== NOTES PANEL ==========
-    // Scroll note into view within panel only (avoid scrolling whole page)
+    // Scroll note into view only when it goes off screen (page-style scrolling)
     function scrollNoteIntoView(noteItem, smooth = false) {
       const container = document.getElementById('notesPanelContent');
       if (!container || !noteItem) return;
       const containerRect = container.getBoundingClientRect();
       const itemRect = noteItem.getBoundingClientRect();
-      const relativeTop = itemRect.top - containerRect.top + container.scrollTop;
-      const targetScroll = relativeTop - containerRect.height / 2 + itemRect.height / 2;
-      container.scrollTo({ top: targetScroll, behavior: smooth ? 'smooth' : 'auto' });
+
+      // Check if note is visible within container
+      const isAbove = itemRect.top < containerRect.top;
+      const isBelow = itemRect.bottom > containerRect.bottom;
+
+      // Only scroll if note is off screen
+      if (isAbove || isBelow) {
+        const relativeTop = itemRect.top - containerRect.top + container.scrollTop;
+        // Scroll to put note near top of container with padding
+        const targetScroll = relativeTop - 20;
+        container.scrollTo({ top: targetScroll, behavior: 'auto' });
+      }
     }
 
     function renderNotesPanel() {
