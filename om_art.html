@@ -406,12 +406,6 @@
 
     /* Mobile responsive */
     @media (max-width: 768px) {
-      body {
-        height: auto;
-        min-height: 100vh;
-        overflow-y: auto;
-      }
-
       .top-bar {
         padding: 6px 12px;
       }
@@ -424,30 +418,25 @@
         flex-direction: column;
         padding: 8px;
         gap: 8px;
-        flex: none;
-        height: auto;
       }
 
-      /* Graph area - fixed height, no extra space */
+      /* Graph takes remaining space after notes panel */
       .visualization {
-        flex: none;
-        height: auto;
-        width: 100%;
+        flex: 1;
+        min-height: 0;
+        order: 1;
       }
 
-      .canvas-container {
-        height: auto;
-        width: 100%;
-        aspect-ratio: 2.5 / 1; /* Width-based height to fit graph with 4:1 ratio plus frame/labels */
-        min-height: 180px;
-      }
-
-      /* Notes panel below - taller on mobile */
+      /* Notes panel fixed height at bottom */
       .notes-panel {
         width: 100%;
         min-width: unset;
         max-width: unset;
-        height: 375px;
+        height: 180px;
+        min-height: 180px;
+        max-height: 180px;
+        flex-shrink: 0;
+        order: 2;
       }
 
       .player-controls {
