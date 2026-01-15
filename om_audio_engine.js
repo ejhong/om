@@ -27,6 +27,15 @@ const OM_DEFAULTS = {
 // Global tuning offset in semitones (0 = C4 reference, -12 = C3, +12 = C5)
 let tuningOffset = 0;
 
+// Global master limiter to prevent clipping/clicking
+let masterLimiter = null;
+function getMasterLimiter() {
+  if (!masterLimiter) {
+    masterLimiter = new Tone.Limiter(-3).toDestination();
+  }
+  return masterLimiter;
+}
+
 /**
  * Set the global tuning offset
  * @param {number} semitones - Offset in semitones (-12 to +12)
@@ -347,7 +356,7 @@ function createSynth(note, volumeDb = -6) {
     chain = formantFilters.output;
   }
 
-  chain.toDestination();
+  chain.connect(getMasterLimiter());
 
   return {
     synth,
