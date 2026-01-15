@@ -60,15 +60,14 @@
       letter-spacing: 0.5px;
     }
 
-    /* Settings row below visualization */
-    .settings-row {
+    /* Settings under graph */
+    .graph-settings {
       display: flex;
       align-items: center;
       justify-content: flex-end;
-      gap: 20px;
-      padding: 10px 24px;
-      background: var(--bg);
-      flex-shrink: 0;
+      gap: 16px;
+      padding: 8px 0;
+      margin-top: 8px;
     }
 
     .preset-select {
@@ -190,6 +189,7 @@
     .visualization {
       flex: 1;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       padding: 24px;
@@ -382,9 +382,10 @@
         padding: 12px;
       }
 
-      .settings-row {
-        padding: 8px 12px;
-        gap: 12px;
+      .graph-settings {
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: center;
       }
 
       .volume-control label,
@@ -397,7 +398,8 @@
         width: 50px;
       }
 
-      .preset-select {
+      .preset-select,
+      .speed-select {
         padding: 6px 8px;
         font-size: 11px;
       }
@@ -427,11 +429,6 @@
       .time-display {
         display: none;
       }
-
-      .speed-select {
-        padding: 4px 6px;
-        font-size: 10px;
-      }
     }
   </style>
 </head>
@@ -453,25 +450,31 @@
       <div class="canvas-container">
         <canvas id="canvas"></canvas>
       </div>
+      <!-- Settings under graph -->
+      <div class="graph-settings">
+        <div class="volume-control">
+          <label>Vol</label>
+          <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="75">
+        </div>
+        <div class="tuning-control">
+          <label>Tune</label>
+          <input type="range" class="tuning-slider" id="tuningSlider" min="-6" max="6" value="0" step="0.1">
+        </div>
+        <select class="preset-select" id="presetSelect">
+          <option value="smad">smad</option>
+          <option value="nndl">nndl</option>
+          <option value="grat">grat</option>
+          <option value="meta">meta</option>
+        </select>
+        <select class="speed-select" id="speedSelect">
+          <option value="0.5">0.5x</option>
+          <option value="0.75">0.75x</option>
+          <option value="1" selected>1x</option>
+          <option value="1.5">1.5x</option>
+          <option value="2">2x</option>
+        </select>
+      </div>
     </div>
-  </div>
-
-  <!-- Settings Row -->
-  <div class="settings-row">
-    <div class="volume-control">
-      <label>Vol</label>
-      <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="75">
-    </div>
-    <div class="tuning-control">
-      <label>Tune</label>
-      <input type="range" class="tuning-slider" id="tuningSlider" min="-6" max="6" value="0" step="0.1">
-    </div>
-    <select class="preset-select" id="presetSelect">
-      <option value="smad">smad</option>
-      <option value="nndl">nndl</option>
-      <option value="grat">grat</option>
-      <option value="meta">meta</option>
-    </select>
   </div>
 
   <!-- Bottom Controls -->
@@ -488,13 +491,6 @@
       </div>
       <div class="time-display" id="timeDisplay">0:00 / 0:00</div>
     </div>
-    <select class="speed-select" id="speedSelect">
-      <option value="0.5">0.5x</option>
-      <option value="0.75">0.75x</option>
-      <option value="1" selected>1x</option>
-      <option value="1.5">1.5x</option>
-      <option value="2">2x</option>
-    </select>
   </div>
 
   <script>
