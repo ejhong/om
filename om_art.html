@@ -160,6 +160,32 @@
       height: 100%;
     }
 
+    .canvas-overlay {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 10;
+    }
+
+    .canvas-overlay .preset-select {
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+      font-size: 10px;
+      padding: 2px 6px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      background: var(--bg);
+      color: var(--text-primary);
+      cursor: pointer;
+      outline: none;
+    }
+
+    .hz-display {
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
     /* Player Controls Bar (YouTube style - at bottom of video) */
     .player-controls {
       display: flex;
@@ -486,6 +512,15 @@
     <div class="visualization">
       <div class="canvas-container">
         <canvas id="canvas"></canvas>
+        <div class="canvas-overlay">
+          <select class="preset-select" id="presetSelect">
+            <option value="smad">smad</option>
+            <option value="nndl">nndl</option>
+            <option value="grat">grat</option>
+            <option value="meta">meta</option>
+          </select>
+          <span class="hz-display" id="hzDisplay">261.6 Hz</span>
+        </div>
       </div>
       <!-- Player Controls Bar (YouTube style) -->
       <div class="player-controls">
@@ -494,12 +529,6 @@
             <path d="M8 5v14l11-7z"/>
           </svg>
         </button>
-        <select class="preset-select" id="presetSelect">
-          <option value="smad">smad</option>
-          <option value="nndl">nndl</option>
-          <option value="grat">grat</option>
-          <option value="meta">meta</option>
-        </select>
         <div class="timeline-container">
           <div class="timeline" id="timeline">
             <div class="timeline-progress" id="timelineProgress"></div>
@@ -724,6 +753,39 @@
       ctx.scale(dpr, dpr);
 
       drawVisualization();
+      positionOverlay();
+    }
+
+    function positionOverlay() {
+      const container = document.querySelector('.canvas-container');
+      const rect = container.getBoundingClientRect();
+      const canvasWidth = rect.width;
+      const canvasHeight = rect.height;
+
+      // Same calculations as drawVisualization
+      const padding = 40;
+      const maxGraphHeight = 200;
+      const aspectRatio = 4;
+      let graphWidth = canvasWidth - 2 * padding;
+      let graphHeight = graphWidth / aspectRatio;
+      if (graphHeight > maxGraphHeight) {
+        graphHeight = maxGraphHeight;
+        graphWidth = graphHeight * aspectRatio;
+      }
+      if (graphHeight > canvasHeight - 2 * padding - 30) {
+        graphHeight = canvasHeight - 2 * padding - 30;
+        graphWidth = graphHeight * aspectRatio;
+      }
+      const offsetX = (canvasWidth - graphWidth) / 2;
+      const offsetY = (canvasHeight - graphHeight) / 2 - 10;
+      const framePadding = 20;
+      const frameTopPadding = 20;
+      const frameX = offsetX - framePadding;
+      const frameY = offsetY - frameTopPadding;
+
+      const overlay = document.querySelector('.canvas-overlay');
+      overlay.style.left = frameX + 'px';
+      overlay.style.top = (frameY - 14) + 'px';
     }
 
     function trajectoryToY(traj, height, padding) {
@@ -945,14 +1007,6 @@
           noteCount += segNotes;
         }
       }
-
-      // Hz display above top left corner of frame
-      const tuning = getTuning();
-      const baseHz = 261.63 * Math.pow(2, tuning / 12);
-      ctx.font = '10px SF Mono, Monaco, monospace';
-      ctx.textAlign = 'left';
-      ctx.fillStyle = '#8a7d6d';
-      ctx.fillText(baseHz.toFixed(1) + ' Hz', frameX, frameY - 8);
 
       // Voice color legend above top right corner of frame
       const legendItems = [
@@ -1277,11 +1331,17 @@
       }, 600);
     }
 
+    function updateHzDisplay() {
+      const tuning = getTuning();
+      const baseHz = 261.63 * Math.pow(2, tuning / 12);
+      document.getElementById('hzDisplay').textContent = baseHz.toFixed(1) + ' Hz';
+    }
+
     document.getElementById('tuningSlider').addEventListener('input', (e) => {
       const semitones = parseFloat(e.target.value);
       setTuning(semitones);
+      updateHzDisplay();
       // Re-parse notes with new tuning (frequencies are calculated at parse time)
-      // This also redraws the visualization which shows Hz on the canvas
       document.getElementById('presetSelect').dispatchEvent(new Event('change'));
       // Play preview tone
       playTuningPreview(semitones);
