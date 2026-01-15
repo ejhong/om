@@ -516,6 +516,27 @@
     let volume = OM_DEFAULTS.defaultVolume; // dB
     let masterVolume = null;
 
+    // ========== AUDIO UNLOCK FOR MOBILE ==========
+    let audioUnlocked = false;
+    async function unlockAudio() {
+      if (audioUnlocked) return;
+      try {
+        await Tone.start();
+        // Also resume AudioContext if suspended
+        if (Tone.context.state !== 'running') {
+          await Tone.context.resume();
+        }
+        audioUnlocked = true;
+        console.log('Audio unlocked');
+      } catch (e) {
+        console.error('Audio unlock failed:', e);
+      }
+    }
+    // Unlock on any user interaction
+    ['touchstart', 'touchend', 'click'].forEach(event => {
+      document.addEventListener(event, unlockAudio, { once: false, passive: true });
+    });
+
     // ========== PARSING (uses om_audio_engine.js) ==========
     // parseVoiceSpec and parseOMInput are loaded from om_audio_engine.js
 
