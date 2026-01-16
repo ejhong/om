@@ -146,6 +146,16 @@ function buildNote(spec, voiceType, mode, register, articulation, octaveLayer, p
   const scaleWhiteKey = WHITE_KEY_SEMITONES[parseInt(scaleNum)] || 0;
   const scaleOffset = scaleType === 'sh' ? scaleWhiteKey + 12 : scaleWhiteKey;
 
+  // Compute KEY (ol + pitch, before scale offset)
+  const keyExtraOctaves = Math.floor(whiteKeyOffset / 12);
+  const keySemitone = whiteKeyOffset % 12;
+  const keyOctave = baseOctave + keyExtraOctaves;
+  const keyNoteName = SEMITONE_TO_NOTE[keySemitone];
+  const keyNote = `${keyNoteName}${keyOctave}`;
+
+  // Scale index 0-15 (sl1=0, sl8=7, sh1=8, sh8=15)
+  const scaleIndex = (scaleType === 'sh' ? 8 : 0) + (parseInt(scaleNum) - 1);
+
   let totalSemitones = whiteKeyOffset + scaleOffset;
 
   // Falsetto shifts up an octave
@@ -189,6 +199,8 @@ function buildNote(spec, voiceType, mode, register, articulation, octaveLayer, p
     pitchNum: parseInt(pitchNum),
     scaleType,
     scaleNum: parseInt(scaleNum),
+    keyNote,
+    scaleIndex,
     trajStart,
     trajEnd,
     trajStartSemitones,

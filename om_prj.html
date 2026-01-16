@@ -72,9 +72,9 @@
 
     /* Right Panel - Notes List (YouTube chat style) */
     .notes-panel {
-      width: 220px;
-      min-width: 220px;
-      max-width: 220px;
+      width: 250px;
+      min-width: 250px;
+      max-width: 250px;
       background: var(--panel-bg);
       border-radius: 12px;
       overflow: hidden;
@@ -708,7 +708,8 @@
           const trajStr = note.trajStart >= 0 ? `+${note.trajStart.toFixed(2)}` : note.trajStart.toFixed(2);
           const freqStr = note.frequency.toFixed(2);
 
-          item.textContent = `${note.voiceType}_${note.mode}/${note.register}/${note.articulation}/${note.noteName}:${trajStr} ${freqStr}Hz`;
+          const scaleStr = String(note.scaleIndex).padStart(2, '0');
+          item.textContent = `${note.voiceType}_${note.mode}/${note.register}/${note.articulation}/${note.keyNote}+${scaleStr}=${note.noteName}:${trajStr} ${freqStr}Hz`;
 
           item.addEventListener('click', () => playSingleNote(note));
           panel.appendChild(item);
