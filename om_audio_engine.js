@@ -21,7 +21,7 @@ const SEMITONE_TO_NOTE = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 
 const OM_DEFAULTS = {
   duration: 6,        // Total duration in seconds at 1x speed
   overlapRatio: 1.8,  // Note overlap for blending effect
-  defaultVolume: 18   // Default volume in dB
+  defaultVolume: 24   // Default volume in dB
 };
 
 // Global tuning offset in semitones (0 = C4 reference, -12 = C3, +12 = C5)
@@ -52,12 +52,22 @@ function getTuning() {
   return tuningOffset;
 }
 
+// Section volume envelope (M2 silent, others at 1.0)
+// Based on analysis: 0.2 -> 1.0 (A2 peak) -> 0.2 (linear decline)
+const SECTION_VOLUMES = {
+  'A1': 1.00, 'A2': 1.00, 'A3': 1.00, 'A4': 1.00,
+  'U1': 1.00, 'U2': 1.00, 'M1': 1.00, 'M2': 0.00
+};
+
 /**
- * Calculate velocity based on trajectory magnitude
+ * Calculate velocity based on trajectory magnitude and section envelope
  */
 function calculateVelocity(note) {
   const trajMagnitude = Math.max(Math.abs(note.trajStart || 0), Math.abs(note.trajEnd || 0));
-  return Math.max(0.1, Math.min(1, 0.6 + trajMagnitude * 0.2));
+  const baseVelocity = 0.6 + trajMagnitude * 0.2;
+  const sectionVol = SECTION_VOLUMES[note.group] ?? 1.0;
+  if (sectionVol === 0) return 0;
+  return Math.max(0.1, Math.min(1, baseVelocity * sectionVol));
 }
 
 /**
@@ -69,8 +79,9 @@ function calculateVelocity(note) {
  * @returns {Object} synthObj for manual disposal if needed
  */
 function playNoteScheduled(note, duration, time, volumeDb = 0) {
-  const synthObj = createSynth(note, volumeDb);
   const velocity = calculateVelocity(note);
+  if (velocity === 0) return null;  // Skip silent notes
+  const synthObj = createSynth(note, volumeDb);
   synthObj.synth.triggerAttackRelease(note.startFrequency, duration, time, velocity);
 
   // Calculate when the note actually starts relative to now (for timeouts)
@@ -530,6 +541,7 @@ if (typeof module !== 'undefined' && module.exports) {
     FORMANTS,
     WHITE_KEY_SEMITONES,
     SEMITONE_TO_NOTE,
-    OM_DEFAULTS
+    OM_DEFAULTS,
+    SECTION_VOLUMES
   };
 }

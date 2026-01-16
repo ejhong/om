@@ -731,7 +731,10 @@
         const duration = Math.max(0.5, (baseDuration / Math.max(1, allNotes.length)) / playbackSpeed);
         // Single click is 6dB quieter to match perceived playback level (playback has overlapping notes)
         currentSynthObj = createSynth(note, volume - 6);
-        currentSynthObj.synth.triggerAttackRelease(note.startFrequency, duration, undefined, calculateVelocity(note));
+        // Ignore section volume for single note clicks - always audible
+        const trajMag = Math.max(Math.abs(note.trajStart || 0), Math.abs(note.trajEnd || 0));
+        const clickVelocity = Math.max(0.1, Math.min(1, 0.6 + trajMag * 0.2));
+        currentSynthObj.synth.triggerAttackRelease(note.startFrequency, duration, undefined, clickVelocity);
       } catch (e) {
         console.error('Audio error:', e);
       }
