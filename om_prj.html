@@ -984,11 +984,11 @@
         if (note.articulation === 'vbr') {
           // Vibrato notes as circles
           ctx.beginPath();
-          ctx.arc(x, y, 3, 0, Math.PI * 2);
+          ctx.arc(x, y, 4, 0, Math.PI * 2);
           ctx.fill();
         } else {
           // Solid notes as rectangles
-          ctx.fillRect(x - segmentWidth/2, y - 3, segmentWidth, 6);
+          ctx.fillRect(x - segmentWidth/2, y - 4, segmentWidth, 8);
         }
 
         ctx.globalAlpha = 1;
