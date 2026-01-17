@@ -288,7 +288,7 @@ function createSynth(note, volumeDb = -6) {
     case 'sng':
       synth = new Tone.FMSynth({
         harmonicity: isFalsetto ? 4 : 3,
-        modulationIndex: isFalsetto ? (isOperatic ? 6 : 4) : (isOperatic ? 12 : 8),
+        modulationIndex: isFalsetto ? 5 : 10,
         oscillator: { type: isFalsetto ? 'triangle' : 'sine' },
         envelope: { attack: 1.2, decay: 0.3, sustain: 0.85, release: 0.8 },
         modulation: { type: 'sine' },
@@ -298,14 +298,14 @@ function createSynth(note, volumeDb = -6) {
 
     case 'ydl':
       synth = new Tone.FMSynth({
-        harmonicity: isFalsetto ? 5 : 3.5,
-        modulationIndex: isFalsetto ? (isOperatic ? 8 : 5) : (isOperatic ? 15 : 10),
+        harmonicity: isFalsetto ? 4 : 3,
+        modulationIndex: isFalsetto ? 4 : 8,
         oscillator: { type: 'triangle' },
         envelope: { attack: 1.0, decay: 0.2, sustain: 0.8, release: 0.7 },
         modulation: { type: 'sine' },
         modulationEnvelope: { attack: 0.8, decay: 0.2, sustain: 0.5, release: 0.5 }
       });
-      effects.push(new Tone.Chorus({ frequency: 2.5, delayTime: 3, depth: 0.3, wet: 0.3 }).start());
+      effects.push(new Tone.Chorus({ frequency: 2.5, delayTime: 3, depth: 0.2, wet: 0.25 }).start());
       break;
 
     case 'tlk':
@@ -347,15 +347,35 @@ function createSynth(note, volumeDb = -6) {
     effects.push(new Tone.Gain(2.0));
   }
 
-  // Operatic: singer's formant + chest resonance
+  // Voice mode: nrm (normal/pop) vs opr (operatic)
   if (isOperatic) {
-    effects.push(new Tone.Filter({ frequency: 2800, type: 'peaking', gain: 8, Q: 3 }));
-    effects.push(new Tone.Filter({ frequency: 400, type: 'peaking', gain: 5, Q: 1.5 }));
+    // Operatic: lowered larynx (darker) + singer's formant (ring) + chest resonance
+    // Darken by cutting highs hard (lowered larynx effect)
+    effects.push(new Tone.Filter({ frequency: 3000, type: 'lowshelf', gain: -10 }));
+    // Singer's formant (the "ring" that cuts through)
+    effects.push(new Tone.Filter({ frequency: 2800, type: 'peaking', gain: 15, Q: 5 }));
+    // Chest resonance from lowered larynx
+    effects.push(new Tone.Filter({ frequency: 350, type: 'peaking', gain: 12, Q: 2 }));
+    // Low-mid body/warmth
+    effects.push(new Tone.Filter({ frequency: 700, type: 'peaking', gain: 8, Q: 1.5 }));
+    // Compensate for perceived loudness loss from high cut
+    effects.push(new Tone.Gain(2.0));
+  } else {
+    // Normal: brighter, more forward, speech-like (neutral larynx)
+    // Boost highs for brightness/presence
+    effects.push(new Tone.Filter({ frequency: 2500, type: 'highshelf', gain: 10 }));
+    // Cut lows and low-mids to reduce warmth/chest
+    effects.push(new Tone.Filter({ frequency: 300, type: 'lowshelf', gain: -6 }));
+    effects.push(new Tone.Filter({ frequency: 500, type: 'peaking', gain: -8, Q: 1.5 }));
+    // Presence boost for "forward" sound
+    effects.push(new Tone.Filter({ frequency: 1800, type: 'peaking', gain: 6, Q: 2 }));
+    // Reduce gain to match opr loudness
+    effects.push(new Tone.Gain(0.8));
   }
 
   // Vibrato articulation
   if (isVibrato) {
-    effects.push(new Tone.Vibrato({ frequency: 5.5, depth: 0.12 }));
+    effects.push(new Tone.Vibrato({ frequency: 4.5, depth: 0.3 }));
   }
 
   // Formant filters for A-U-M vowels
