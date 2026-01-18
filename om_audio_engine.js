@@ -281,70 +281,102 @@ function createSynth(note, volumeDb = -6) {
   const isFalsetto = register === 'fls';
   const isOperatic = mode === 'opr';
 
-  // Voice type variations (just different FMSynth params)
+  // Mode-based synth parameters - THIS is what makes the big difference
+  // Operatic: high modulation = rich harmonics, slow attack = legato phrasing
+  // Normal: low modulation = simpler sound, faster attack = speech-like
+  const isVbr = articulation === 'vbr';
+  const isSld = articulation === 'sld';
+  // For sld: kill ALL FM modulation to get clean sound
+  // For vbr: minimal FM, let Vibrato effect handle it
+  const modEnvSus = isSld ? 0 : 0.05;
+  const modIndexMult = isSld ? 0.05 : 1.0;  // nearly zero FM for sld
+  const modeParams = isOperatic ? {
+    modBoost: 1.1 * modIndexMult,       // Richer harmonics
+    harmBoost: 1.0,      // More harmonics
+    atkMult: 1.1,        // Slower attack (legato)
+    susBoost: 0.1,       // More sustain
+    oscType: 'triangle', // Triangle for both modes
+    volBoost: 3          // Louder
+  } : {
+    modBoost: 0.4 * modIndexMult,       // Less modulation
+    harmBoost: 0.7,      // Fewer harmonics
+    atkMult: 0.5,        // Faster attack (speech-like)
+    susBoost: -0.1,      // Less sustain
+    oscType: 'triangle', // Original triangle for normal
+    volBoost: 0          // No volume adjustment
+  };
+
+  // Voice type variations combined with mode
+  // modEnvSus controls FM wobble: 0 for sld (clean), low for vbr (Vibrato effect handles it)
   let synth;
   switch (voiceType) {
     case 'sng':
       synth = new Tone.FMSynth({
-        harmonicity: isFalsetto ? 4 : 3,
-        modulationIndex: isFalsetto ? 5 : 10,
-        oscillator: { type: isFalsetto ? 'triangle' : 'sine' },
-        envelope: { attack: 1.2, decay: 0.3, sustain: 0.85, release: 0.8 },
+        harmonicity: (isFalsetto ? 4 : 3) * modeParams.harmBoost,
+        modulationIndex: (isFalsetto ? 5 : 10) * modeParams.modBoost,
+        oscillator: { type: isFalsetto ? 'triangle' : modeParams.oscType },
+        envelope: { attack: 1.2 * modeParams.atkMult, decay: 0.3, sustain: Math.min(0.95, 0.85 + modeParams.susBoost), release: 0.8 },
         modulation: { type: 'sine' },
-        modulationEnvelope: { attack: 1.0, decay: 0.3, sustain: 0.6, release: 0.6 }
+        modulationEnvelope: { attack: 1.0 * modeParams.atkMult, decay: 0.3, sustain: modEnvSus, release: 0.6 }
       });
       break;
     case 'ydl':
+      // ydl: use sine oscillator for sld (clean), triangle for vbr (character)
       synth = new Tone.FMSynth({
-        harmonicity: isFalsetto ? 4 : 3,
-        modulationIndex: isFalsetto ? 4 : 8,
-        oscillator: { type: 'triangle' },
-        envelope: { attack: 1.0, decay: 0.2, sustain: 0.8, release: 0.7 },
+        harmonicity: (isFalsetto ? 4 : 3) * modeParams.harmBoost,
+        modulationIndex: (isFalsetto ? 4 : 8) * (isSld ? 0.1 : modeParams.modBoost),  // very low FM for sld
+        oscillator: { type: isSld ? 'sine' : 'triangle' },  // sine for clean sld
+        envelope: { attack: 1.0 * modeParams.atkMult, decay: 0.2, sustain: Math.min(0.95, 0.8 + modeParams.susBoost), release: 0.7 },
         modulation: { type: 'sine' },
-        modulationEnvelope: { attack: 0.8, decay: 0.2, sustain: 0.5, release: 0.5 }
+        modulationEnvelope: { attack: 0.8 * modeParams.atkMult, decay: 0.2, sustain: modEnvSus, release: 0.5 }
       });
       break;
     case 'tlk':
       synth = new Tone.FMSynth({
-        harmonicity: isFalsetto ? 2.5 : 2,
-        modulationIndex: isFalsetto ? 3 : 6,
-        oscillator: { type: 'sine' },
-        envelope: { attack: 0.9, decay: 0.2, sustain: 0.75, release: 0.6 },
-        modulation: { type: 'triangle' },
-        modulationEnvelope: { attack: 0.7, decay: 0.15, sustain: 0.5, release: 0.5 }
+        harmonicity: (isFalsetto ? 2.5 : 2) * modeParams.harmBoost,
+        modulationIndex: (isFalsetto ? 3 : 6) * modeParams.modBoost,
+        oscillator: { type: modeParams.oscType },
+        envelope: { attack: 0.9 * modeParams.atkMult, decay: 0.2, sustain: Math.min(0.95, 0.75 + modeParams.susBoost), release: 0.6 },
+        modulation: { type: isOperatic ? 'sine' : 'triangle' },
+        modulationEnvelope: { attack: 0.7 * modeParams.atkMult, decay: 0.15, sustain: modEnvSus, release: 0.5 }
       });
       break;
     case 'rap':
       synth = new Tone.FMSynth({
-        harmonicity: isFalsetto ? 3 : 2,
-        modulationIndex: isFalsetto ? 2.5 : 5,
-        oscillator: { type: isFalsetto ? 'triangle' : 'sine' },
-        envelope: { attack: 0.8, decay: 0.2, sustain: 0.7, release: 0.5 },
+        harmonicity: (isFalsetto ? 3 : 2) * modeParams.harmBoost,
+        modulationIndex: (isFalsetto ? 2.5 : 5) * modeParams.modBoost,
+        oscillator: { type: isFalsetto ? 'triangle' : modeParams.oscType },
+        envelope: { attack: 0.8 * modeParams.atkMult, decay: 0.2, sustain: Math.min(0.95, 0.7 + modeParams.susBoost), release: 0.5 },
         modulation: { type: 'sine' },
-        modulationEnvelope: { attack: 0.6, decay: 0.15, sustain: 0.4, release: 0.4 }
+        modulationEnvelope: { attack: 0.6 * modeParams.atkMult, decay: 0.15, sustain: modEnvSus, release: 0.4 }
       });
       break;
     default:
       synth = new Tone.FMSynth({
-        harmonicity: 2,
-        modulationIndex: 4,
-        envelope: { attack: 0.8, decay: 0.3, sustain: 0.8, release: 0.6 }
+        harmonicity: 2 * modeParams.harmBoost,
+        modulationIndex: 4 * modeParams.modBoost,
+        envelope: { attack: 0.8 * modeParams.atkMult, decay: 0.3, sustain: 0.8, release: 0.6 },
+        modulationEnvelope: { sustain: modEnvSus }
       });
   }
 
-  const isVibrato = articulation === 'vbr';
-  const volume = new Tone.Volume(isFalsetto ? volumeDb - 6 : volumeDb);
+  const baseVol = isFalsetto ? volumeDb - 6 : volumeDb;
+  const volume = new Tone.Volume(baseVol + modeParams.volBoost);
   let vibrato = null;
   let operaticFilters = [];
 
   // NOTE: Chorus for ydl was removed - too CPU intensive, caused audio cutout
 
-  // Operatic mode: singer's formant + chest resonance
+  // Voice mode filters
   if (isOperatic) {
-    operaticFilters.push(new Tone.Filter({ frequency: 2800, type: 'peaking', gain: 8, Q: 3 }));
-    operaticFilters.push(new Tone.Filter({ frequency: 400, type: 'peaking', gain: 5, Q: 1.5 }));
+    // Operatic: boost chest resonance, add singer's formant ring
+    operaticFilters.push(new Tone.Filter({ frequency: 2800, type: 'peaking', gain: 8, Q: 3 }));  // singer's ring
+    operaticFilters.push(new Tone.Filter({ frequency: 400, type: 'peaking', gain: 6, Q: 1 }));  // chest warmth
+  } else {
+    // Normal: thinner, more nasal, speech-like
+    operaticFilters.push(new Tone.Filter({ frequency: 300, type: 'highpass', rolloff: -12 }));  // reduce bass
+    operaticFilters.push(new Tone.Filter({ frequency: 3000, type: 'highshelf', gain: 4 }));  // add brightness
   }
-  // Normal mode: no extra filters (passthrough)
 
   // Formant filters for A-U-M vowels
   let formantFilters = null;
@@ -353,8 +385,8 @@ function createSynth(note, volumeDb = -6) {
   }
 
   // Vibrato for vbr articulation
-  if (isVibrato) {
-    vibrato = new Tone.Vibrato({ frequency: 5.5, depth: 0.12 });
+  if (isVbr) {
+    vibrato = new Tone.Vibrato({ frequency: 5.5, depth: 0.5 });
   }
 
   // Chain: synth -> operatic? -> vibrato? -> formants? -> volume -> limiter
@@ -497,7 +529,7 @@ async function renderOMOffline(notes, totalDuration, options = {}) {
 function createSynthForOffline(note, volumeDb, destination) {
   const { voiceType, mode, register, articulation, section } = note;
   const isFalsetto = register === 'fls';
-  const isVibrato = articulation === 'vbr';
+  const isVbr = articulation === 'vbr';
 
   // Simplified synth - just vary harmonicity and modulation index by voice type
   const harmonicity = voiceType === 'sng' ? 3 : voiceType === 'ydl' ? 3 : 2;
@@ -515,8 +547,8 @@ function createSynthForOffline(note, volumeDb, destination) {
   // Minimal effect chain for speed
   const vol = new Tone.Volume(isFalsetto ? volumeDb - 6 : volumeDb);
 
-  if (isVibrato) {
-    const vibrato = new Tone.Vibrato({ frequency: 5.5, depth: 0.12 });
+  if (isVbr) {
+    const vibrato = new Tone.Vibrato({ frequency: 5.5, depth: 0.5 });
     synth.connect(vibrato);
     vibrato.connect(vol);
   } else {
