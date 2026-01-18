@@ -199,6 +199,36 @@
       flex-shrink: 0;
     }
 
+    /* Rendering indicator */
+    .rendering-indicator {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 12px;
+      background: var(--accent);
+      color: white;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .rendering-indicator.active {
+      display: flex;
+    }
+
+    .rendering-spinner {
+      width: 12px;
+      height: 12px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
     /* Settings popup */
     .settings-container {
       position: relative;
@@ -530,6 +560,10 @@
             <path d="M8 5v14l11-7z"/>
           </svg>
         </button>
+        <div class="rendering-indicator" id="renderingIndicator">
+          <div class="rendering-spinner"></div>
+          <span>Rendering...</span>
+        </div>
         <div class="timeline-container">
           <div class="timeline" id="timeline">
             <div class="timeline-progress" id="timelineProgress"></div>
@@ -621,6 +655,11 @@
     let volume = OM_DEFAULTS.defaultVolume; // dB
     let masterVolume = null;
 
+    // Offline audio player for pre-rendered audio (disabled for now - too slow)
+    const USE_OFFLINE_RENDERING = false;
+    const offlinePlayer = new OMOfflinePlayer();
+    let needsRender = true; // Flag to track if audio needs re-rendering
+
     // ========== AUDIO UNLOCK FOR MOBILE ==========
     let audioUnlocked = false;
     async function unlockAudio() {
@@ -644,6 +683,55 @@
 
     // ========== PARSING (uses om_audio_engine.js) ==========
     // parseVoiceSpec and parseOMInput are loaded from om_audio_engine.js
+
+    // ========== OFFLINE AUDIO RENDERING ==========
+    // Set up offline player callbacks
+    offlinePlayer.onRenderStart = () => {
+      document.getElementById('renderingIndicator').classList.add('active');
+      document.getElementById('playBtn').disabled = true;
+    };
+
+    offlinePlayer.onRenderComplete = () => {
+      document.getElementById('renderingIndicator').classList.remove('active');
+      document.getElementById('playBtn').disabled = false;
+      needsRender = false;
+    };
+
+    offlinePlayer.onProgress = (currentTime, noteIndex) => {
+      currentNoteIndex = noteIndex;
+      playedSegments = allNotes.slice(0, noteIndex + 1).map((n, idx) => ({ note: n, index: idx }));
+
+      // Update note highlighting
+      document.querySelectorAll('.note-item.playing').forEach(el => el.classList.remove('playing'));
+      const noteItem = document.querySelector(`.note-item[data-index="${noteIndex}"]`);
+      if (noteItem) {
+        noteItem.classList.add('playing');
+        scrollNoteIntoView(noteItem, playbackSpeed <= 1);
+      }
+
+      updateTimeline();
+      drawVisualization();
+    };
+
+    offlinePlayer.onPlaybackEnd = () => {
+      finishPlayback();
+    };
+
+    // Render audio with current settings
+    async function renderAudio() {
+      if (allNotes.length === 0) return;
+
+      const totalDuration = baseDuration / playbackSpeed;
+      await offlinePlayer.render(allNotes, totalDuration, {
+        volumeDb: volume,
+        overlapRatio: OM_DEFAULTS.overlapRatio
+      });
+    }
+
+    // Mark that render is needed (called when settings change)
+    function invalidateRender() {
+      needsRender = true;
+    }
 
     // ========== SETTINGS POPUP ==========
     const settingsBtn = document.getElementById('settingsBtn');
@@ -1092,15 +1180,11 @@
 
       await Tone.start();
 
-      // Reset transport
-      Tone.Transport.stop();
-      Tone.Transport.cancel();
-      Tone.Transport.position = 0;
-
       // If at or near the end, start from beginning
       if (currentNoteIndex >= allNotes.length - 1) {
         currentNoteIndex = 0;
         playedSegments = [];
+        if (USE_OFFLINE_RENDERING) offlinePlayer.stop();
       }
 
       const startIndex = currentNoteIndex;
@@ -1108,7 +1192,6 @@
       startTime = Date.now();
 
       // Scroll to current note
-      const notesPanel = document.querySelector('.notes-panel');
       const startNoteItem = document.querySelector(`.note-item[data-index="${startIndex}"]`);
       if (startNoteItem) {
         scrollNoteIntoView(startNoteItem, false);
@@ -1121,45 +1204,56 @@
       document.getElementById('playIcon').innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
 
       const totalDuration = baseDuration / playbackSpeed;
-      const noteCount = allNotes.length;
-      const noteDuration = totalDuration / noteCount;
-      const noteSoundDuration = noteDuration * OM_DEFAULTS.overlapRatio;
 
-      // Schedule notes from current position using Transport
-      for (let i = startIndex; i < noteCount; i++) {
-        const note = allNotes[i];
-        const noteTime = (i - startIndex) * noteDuration; // Time relative to start position
+      if (USE_OFFLINE_RENDERING) {
+        // Offline mode: render if needed, then play buffer
+        if (needsRender) {
+          await renderAudio();
+        }
+        const seekTime = (startIndex / allNotes.length) * totalDuration;
+        offlinePlayer.play(seekTime);
+      } else {
+        // Real-time mode: schedule notes with Transport
+        Tone.Transport.stop();
+        Tone.Transport.cancel();
+        Tone.Transport.position = 0;
 
-        Tone.Transport.schedule((time) => {
-          // Play the note using shared engine function
-          playNoteScheduled(note, noteSoundDuration, time, volume);
+        const noteCount = allNotes.length;
+        const noteDuration = totalDuration / noteCount;
+        const noteSoundDuration = noteDuration * OM_DEFAULTS.overlapRatio;
 
-          // Update UI
-          Tone.Draw.schedule(() => {
-            currentNoteIndex = i;
-            playedSegments = allNotes.slice(0, i + 1).map((n, idx) => ({ note: n, index: idx }));
+        for (let i = startIndex; i < noteCount; i++) {
+          const note = allNotes[i];
+          const noteTime = (i - startIndex) * noteDuration;
 
-            document.querySelectorAll('.note-item.playing').forEach(el => el.classList.remove('playing'));
-            const noteItem = document.querySelector(`.note-item[data-index="${i}"]`);
-            if (noteItem) {
-              noteItem.classList.add('playing');
-              scrollNoteIntoView(noteItem, playbackSpeed <= 1);
-            }
+          Tone.Transport.schedule((time) => {
+            playNoteScheduled(note, noteSoundDuration, time, volume);
 
-            updateTimeline();
-            drawVisualization();
-          }, time);
-        }, noteTime);
+            Tone.Draw.schedule(() => {
+              currentNoteIndex = i;
+              playedSegments = allNotes.slice(0, i + 1).map((n, idx) => ({ note: n, index: idx }));
+
+              document.querySelectorAll('.note-item.playing').forEach(el => el.classList.remove('playing'));
+              const noteItem = document.querySelector(`.note-item[data-index="${i}"]`);
+              if (noteItem) {
+                noteItem.classList.add('playing');
+                scrollNoteIntoView(noteItem, playbackSpeed <= 1);
+              }
+
+              updateTimeline();
+              drawVisualization();
+            }, time);
+          }, noteTime);
+        }
+
+        Tone.Transport.start();
+
+        const remainingDuration = (noteCount - startIndex) * noteDuration;
+        if (playbackTimeout) clearTimeout(playbackTimeout);
+        playbackTimeout = setTimeout(() => {
+          if (isPlaying) finishPlayback();
+        }, (remainingDuration + 1) * 1000);
       }
-
-      Tone.Transport.start();
-
-      // Stop when done (but keep the visualization)
-      const remainingDuration = (noteCount - startIndex) * noteDuration;
-      if (playbackTimeout) clearTimeout(playbackTimeout);
-      playbackTimeout = setTimeout(() => {
-        if (isPlaying) finishPlayback();
-      }, (remainingDuration + 1) * 1000);
     }
 
     function finishPlayback() {
@@ -1169,13 +1263,11 @@
         clearTimeout(playbackTimeout);
         playbackTimeout = null;
       }
-      Tone.Transport.stop();
-      Tone.Transport.cancel();
-      Tone.Transport.position = 0;
 
-      if (currentSynthObj) {
-        try { currentSynthObj.dispose(); } catch(e) {}
-        currentSynthObj = null;
+      if (!USE_OFFLINE_RENDERING) {
+        Tone.Transport.stop();
+        Tone.Transport.cancel();
+        Tone.Transport.position = 0;
       }
 
       document.getElementById('playIcon').innerHTML = '<path d="M8 5v14l11-7z"/>';
@@ -1189,14 +1281,12 @@
         playbackTimeout = null;
       }
 
-      // Stop Transport and clear scheduled events
-      Tone.Transport.stop();
-      Tone.Transport.cancel();
-      Tone.Transport.position = 0;
-
-      if (currentSynthObj) {
-        try { currentSynthObj.dispose(); } catch(e) {}
-        currentSynthObj = null;
+      if (USE_OFFLINE_RENDERING) {
+        offlinePlayer.pause();
+      } else {
+        Tone.Transport.stop();
+        Tone.Transport.cancel();
+        Tone.Transport.position = 0;
       }
 
       document.getElementById('playIcon').innerHTML = '<path d="M8 5v14l11-7z"/>';
@@ -1204,6 +1294,7 @@
 
     function resetPlayback() {
       stopPlayback();
+      if (USE_OFFLINE_RENDERING) offlinePlayer.stop();
       currentNoteIndex = 0;
       pausedAt = 0;
       playedSegments = [];
@@ -1232,6 +1323,13 @@
       // Update position
       currentNoteIndex = noteIndex;
       playedSegments = allNotes.slice(0, noteIndex).map((n, idx) => ({ note: n, index: idx }));
+
+      // Update offline player position (if using offline mode)
+      if (USE_OFFLINE_RENDERING) {
+        const totalDuration = baseDuration / playbackSpeed;
+        offlinePlayer.pausedAt = (noteIndex / allNotes.length) * totalDuration;
+      }
+
       updateTimeline();
       drawVisualization();
 
@@ -1295,10 +1393,12 @@
     document.getElementById('speedSelect').addEventListener('change', (e) => {
       playbackSpeed = parseFloat(e.target.value);
       updateTimeDisplay();
+      invalidateRender(); // Speed affects duration, need to re-render
     });
 
     document.getElementById('volumeSlider').addEventListener('input', (e) => {
       volume = (e.target.value / 100) * 48 - 24; // Map 0-100 to -24 to +24 dB
+      invalidateRender(); // Volume is baked into render
     });
 
     // Play a preview tone for tuning (sounds like mdl/sld voice)
@@ -1384,6 +1484,7 @@
       addSegmentMarkers();
       drawVisualization();
       updateTimeDisplay();
+      invalidateRender(); // New notes, need to re-render
 
       // Scroll notes panel to top
       const notesPanelContent = document.getElementById('notesPanelContent');

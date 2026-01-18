@@ -3,6 +3,9 @@
  * Requires Tone.js to be loaded first
  */
 
+// Optimize for smooth playback over low latency
+Tone.context.latencyHint = 'playback';
+
 // White key semitone offsets from C (c1=C, c2=D, c3=E, c4=F, c5=G, c6=A, c7=B, c8=C+octave)
 const WHITE_KEY_SEMITONES = {
   1: 0,   // C
@@ -20,7 +23,7 @@ const SEMITONE_TO_NOTE = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 
 // OM playback defaults
 const OM_DEFAULTS = {
   duration: 6,        // Total duration in seconds at 1x speed
-  overlapRatio: 1.8,  // Note overlap for blending effect
+  overlapRatio: 1.0,  // Note overlap for blending effect (was 1.8, reduced for CPU)
   defaultVolume: 24   // Default volume in dB
 };
 
@@ -96,8 +99,8 @@ function playNoteScheduled(note, duration, time, volumeDb = 0) {
     }, startDelayMs + 50);
   }
 
-  // Auto-cleanup after note finishes (start delay + duration + release buffer)
-  const cleanupDelay = startDelayMs + (duration + 2) * 1000;
+  // Auto-cleanup after note finishes (start delay + duration + small buffer for release)
+  const cleanupDelay = startDelayMs + (duration + 0.5) * 1000;
   setTimeout(() => { try { synthObj.dispose(); } catch(e) {} }, cleanupDelay);
 
   return synthObj;
@@ -275,15 +278,11 @@ function createFormantFilters(section) {
  */
 function createSynth(note, volumeDb = -6) {
   const { voiceType, mode, register, articulation, section } = note;
-  const isOperatic = mode === 'opr';
   const isFalsetto = register === 'fls';
-  const isVibrato = articulation === 'vbr';
+  const isOperatic = mode === 'opr';
 
+  // Voice type variations (just different FMSynth params)
   let synth;
-  const effects = [];
-  let formantFilters = null;
-
-  // Synth settings per voice type with slow OM-appropriate envelopes
   switch (voiceType) {
     case 'sng':
       synth = new Tone.FMSynth({
@@ -295,7 +294,6 @@ function createSynth(note, volumeDb = -6) {
         modulationEnvelope: { attack: 1.0, decay: 0.3, sustain: 0.6, release: 0.6 }
       });
       break;
-
     case 'ydl':
       synth = new Tone.FMSynth({
         harmonicity: isFalsetto ? 4 : 3,
@@ -305,9 +303,7 @@ function createSynth(note, volumeDb = -6) {
         modulation: { type: 'sine' },
         modulationEnvelope: { attack: 0.8, decay: 0.2, sustain: 0.5, release: 0.5 }
       });
-      effects.push(new Tone.Chorus({ frequency: 2.5, delayTime: 3, depth: 0.2, wet: 0.25 }).start());
       break;
-
     case 'tlk':
       synth = new Tone.FMSynth({
         harmonicity: isFalsetto ? 2.5 : 2,
@@ -318,7 +314,6 @@ function createSynth(note, volumeDb = -6) {
         modulationEnvelope: { attack: 0.7, decay: 0.15, sustain: 0.5, release: 0.5 }
       });
       break;
-
     case 'rap':
       synth = new Tone.FMSynth({
         harmonicity: isFalsetto ? 3 : 2,
@@ -329,7 +324,6 @@ function createSynth(note, volumeDb = -6) {
         modulationEnvelope: { attack: 0.6, decay: 0.15, sustain: 0.4, release: 0.4 }
       });
       break;
-
     default:
       synth = new Tone.FMSynth({
         harmonicity: 2,
@@ -338,77 +332,58 @@ function createSynth(note, volumeDb = -6) {
       });
   }
 
-  // Falsetto: brighter, airier
-  if (isFalsetto) {
-    effects.push(new Tone.Filter({ frequency: 250, type: 'highpass', rolloff: -12 }));
-    effects.push(new Tone.Filter({ frequency: 2000, type: 'highshelf', gain: 6 }));
-  } else {
-    // Modal: boost volume
-    effects.push(new Tone.Gain(2.0));
-  }
+  const isVibrato = articulation === 'vbr';
+  const volume = new Tone.Volume(isFalsetto ? volumeDb - 6 : volumeDb);
+  let vibrato = null;
+  let operaticFilters = [];
 
-  // Voice mode: nrm (normal/pop) vs opr (operatic)
+  // NOTE: Chorus for ydl was removed - too CPU intensive, caused audio cutout
+
+  // Operatic mode: singer's formant + chest resonance
   if (isOperatic) {
-    // Operatic: lowered larynx (darker) + singer's formant (ring) + chest resonance
-    // Darken by cutting highs hard (lowered larynx effect)
-    effects.push(new Tone.Filter({ frequency: 3000, type: 'lowshelf', gain: -10 }));
-    // Singer's formant (the "ring" that cuts through)
-    effects.push(new Tone.Filter({ frequency: 2800, type: 'peaking', gain: 15, Q: 5 }));
-    // Chest resonance from lowered larynx
-    effects.push(new Tone.Filter({ frequency: 350, type: 'peaking', gain: 12, Q: 2 }));
-    // Low-mid body/warmth
-    effects.push(new Tone.Filter({ frequency: 700, type: 'peaking', gain: 8, Q: 1.5 }));
-    // Compensate for perceived loudness loss from high cut
-    effects.push(new Tone.Gain(2.0));
-  } else {
-    // Normal: brighter, more forward, speech-like (neutral larynx)
-    // Boost highs for brightness/presence
-    effects.push(new Tone.Filter({ frequency: 2500, type: 'highshelf', gain: 10 }));
-    // Cut lows and low-mids to reduce warmth/chest
-    effects.push(new Tone.Filter({ frequency: 300, type: 'lowshelf', gain: -6 }));
-    effects.push(new Tone.Filter({ frequency: 500, type: 'peaking', gain: -8, Q: 1.5 }));
-    // Presence boost for "forward" sound
-    effects.push(new Tone.Filter({ frequency: 1800, type: 'peaking', gain: 6, Q: 2 }));
-    // Reduce gain to match opr loudness
-    effects.push(new Tone.Gain(0.8));
+    operaticFilters.push(new Tone.Filter({ frequency: 2800, type: 'peaking', gain: 8, Q: 3 }));
+    operaticFilters.push(new Tone.Filter({ frequency: 400, type: 'peaking', gain: 5, Q: 1.5 }));
   }
-
-  // Vibrato articulation
-  if (isVibrato) {
-    effects.push(new Tone.Vibrato({ frequency: 4.5, depth: 0.3 }));
-  }
+  // Normal mode: no extra filters (passthrough)
 
   // Formant filters for A-U-M vowels
+  let formantFilters = null;
   if (section) {
     formantFilters = createFormantFilters(section);
   }
 
-  // Volume control
-  const volume = new Tone.Volume(isFalsetto ? volumeDb - 6 : volumeDb);
-  effects.push(volume);
-
-  // Chain: synth -> effects -> formants -> destination
-  let chain = synth;
-  for (const effect of effects) {
-    chain.connect(effect);
-    chain = effect;
+  // Vibrato for vbr articulation
+  if (isVibrato) {
+    vibrato = new Tone.Vibrato({ frequency: 5.5, depth: 0.12 });
   }
 
+  // Chain: synth -> operatic? -> vibrato? -> formants? -> volume -> limiter
+  let chain = synth;
+  for (const filter of operaticFilters) {
+    chain.connect(filter);
+    chain = filter;
+  }
+  if (vibrato) {
+    chain.connect(vibrato);
+    chain = vibrato;
+  }
   if (formantFilters) {
     chain.connect(formantFilters.input);
     chain = formantFilters.output;
   }
-
-  chain.connect(getMasterLimiter());
+  chain.connect(volume);
+  volume.connect(getMasterLimiter());
 
   return {
     synth,
-    effects,
+    effects: [volume, vibrato, ...operaticFilters].filter(Boolean),
     formantFilters,
     dispose: () => {
       try {
         synth.dispose();
-        effects.forEach(e => e.dispose());
+        volume.dispose();
+        if (vibrato) vibrato.dispose();
+        operaticFilters.forEach(f => f.dispose());
         if (formantFilters) formantFilters.dispose();
       } catch (e) {
         // Ignore disposal errors
@@ -453,6 +428,317 @@ async function playNote(note, durationSec, volumeDb = -6, onFinish = null) {
   } catch (e) {
     console.error('Error playing note:', e);
     return null;
+  }
+}
+
+/**
+ * Render OM audio offline to a buffer for glitch-free playback
+ * @param {Array} notes - Array of parsed note objects
+ * @param {number} totalDuration - Total duration in seconds
+ * @param {Object} options - { volumeDb, overlapRatio }
+ * @returns {Promise<{player: Tone.Player, buffer: Tone.ToneAudioBuffer}>}
+ */
+async function renderOMOffline(notes, totalDuration, options = {}) {
+  const {
+    volumeDb = -6,
+    overlapRatio = OM_DEFAULTS.overlapRatio
+  } = options;
+
+  if (!notes || notes.length === 0) {
+    return null;
+  }
+
+  const noteCount = notes.length;
+  const noteDuration = totalDuration / noteCount;
+  const noteSoundDuration = noteDuration * overlapRatio;
+
+  // Add extra time for release tails
+  const renderDuration = totalDuration + 3;
+
+  // Render offline - this happens without real-time constraints
+  const buffer = await Tone.Offline(() => {
+    // Create a limiter for the offline context
+    const limiter = new Tone.Limiter(-3).toDestination();
+
+    // Create all synths and schedule their notes upfront
+    for (let i = 0; i < noteCount; i++) {
+      const note = notes[i];
+      const noteTime = i * noteDuration;
+
+      // Calculate velocity
+      const velocity = calculateVelocity(note);
+      if (velocity === 0) continue; // Skip silent notes (M2)
+
+      // Create synth for this note
+      const synthObj = createSynthForOffline(note, volumeDb, limiter);
+      if (!synthObj) continue;
+
+      const { synth } = synthObj;
+
+      // Schedule the note directly with absolute time
+      synth.triggerAttackRelease(note.startFrequency, noteSoundDuration, noteTime, velocity);
+
+      // Frequency glide if needed
+      if (note.startFrequency !== note.endFrequency) {
+        synth.frequency.rampTo(note.endFrequency, noteSoundDuration * 0.8, noteTime + 0.05);
+      }
+    }
+  }, renderDuration);
+
+  // Create a player from the buffer
+  const player = new Tone.Player(buffer).toDestination();
+
+  return { player, buffer, duration: totalDuration };
+}
+
+/**
+ * Create synth for offline rendering (simplified for speed)
+ */
+function createSynthForOffline(note, volumeDb, destination) {
+  const { voiceType, mode, register, articulation, section } = note;
+  const isFalsetto = register === 'fls';
+  const isVibrato = articulation === 'vbr';
+
+  // Simplified synth - just vary harmonicity and modulation index by voice type
+  const harmonicity = voiceType === 'sng' ? 3 : voiceType === 'ydl' ? 3 : 2;
+  const modIndex = isFalsetto ? 4 : 8;
+
+  const synth = new Tone.FMSynth({
+    harmonicity,
+    modulationIndex: modIndex,
+    oscillator: { type: isFalsetto ? 'triangle' : 'sine' },
+    envelope: { attack: 1.0, decay: 0.3, sustain: 0.8, release: 0.8 },
+    modulation: { type: 'sine' },
+    modulationEnvelope: { attack: 0.8, decay: 0.3, sustain: 0.5, release: 0.5 }
+  });
+
+  // Minimal effect chain for speed
+  const vol = new Tone.Volume(isFalsetto ? volumeDb - 6 : volumeDb);
+
+  if (isVibrato) {
+    const vibrato = new Tone.Vibrato({ frequency: 5.5, depth: 0.12 });
+    synth.connect(vibrato);
+    vibrato.connect(vol);
+  } else {
+    synth.connect(vol);
+  }
+
+  vol.connect(destination);
+
+  return { synth };
+}
+
+/**
+ * OM Offline Player - plays pre-rendered audio with visualization sync
+ */
+class OMOfflinePlayer {
+  constructor() {
+    this.player = null;
+    this.buffer = null;
+    this.duration = 0;
+    this.isPlaying = false;
+    this.isRendering = false;
+    this.startTime = 0;
+    this.pausedAt = 0;
+    this.animationFrame = null;
+    this.onProgress = null; // Callback: (currentTime, noteIndex) => void
+    this.onRenderStart = null;
+    this.onRenderComplete = null;
+    this.onPlaybackEnd = null;
+  }
+
+  /**
+   * Pre-render audio for given notes
+   */
+  async render(notes, totalDuration, options = {}) {
+    if (this.isRendering) return;
+
+    this.stop();
+    this.isRendering = true;
+
+    if (this.onRenderStart) {
+      this.onRenderStart();
+    }
+
+    try {
+      // Dispose old player
+      if (this.player) {
+        this.player.dispose();
+        this.player = null;
+      }
+
+      // Render new audio
+      const result = await renderOMOffline(notes, totalDuration, options);
+
+      if (result) {
+        this.player = result.player;
+        this.buffer = result.buffer;
+        this.duration = result.duration;
+        this.notes = notes;
+        this.noteDuration = totalDuration / notes.length;
+      }
+
+      if (this.onRenderComplete) {
+        this.onRenderComplete();
+      }
+    } catch (e) {
+      console.error('Render error:', e);
+    } finally {
+      this.isRendering = false;
+    }
+  }
+
+  /**
+   * Start playback from current position
+   */
+  async play(fromTime = null) {
+    if (!this.player || this.isRendering) return;
+
+    await Tone.start();
+
+    const startOffset = fromTime !== null ? fromTime : this.pausedAt;
+    this.startTime = Tone.now() - startOffset;
+    this.isPlaying = true;
+
+    // Start player from offset
+    this.player.start(Tone.now(), startOffset);
+
+    // Start progress animation
+    this._animateProgress();
+
+    // Schedule end
+    const remaining = this.duration - startOffset;
+    setTimeout(() => {
+      if (this.isPlaying) {
+        this.finish();
+      }
+    }, remaining * 1000 + 100);
+  }
+
+  /**
+   * Pause playback
+   */
+  pause() {
+    if (!this.isPlaying) return;
+
+    this.isPlaying = false;
+    this.pausedAt = Tone.now() - this.startTime;
+
+    if (this.player) {
+      this.player.stop();
+    }
+
+    if (this.animationFrame) {
+      cancelAnimationFrame(this.animationFrame);
+      this.animationFrame = null;
+    }
+  }
+
+  /**
+   * Stop and reset
+   */
+  stop() {
+    this.isPlaying = false;
+    this.pausedAt = 0;
+
+    if (this.player) {
+      try { this.player.stop(); } catch(e) {}
+    }
+
+    if (this.animationFrame) {
+      cancelAnimationFrame(this.animationFrame);
+      this.animationFrame = null;
+    }
+  }
+
+  /**
+   * Seek to time position
+   */
+  seek(time) {
+    const wasPlaying = this.isPlaying;
+    this.stop();
+    this.pausedAt = Math.max(0, Math.min(time, this.duration));
+
+    if (wasPlaying) {
+      this.play();
+    } else if (this.onProgress) {
+      const noteIndex = Math.floor(this.pausedAt / this.noteDuration);
+      this.onProgress(this.pausedAt, noteIndex);
+    }
+  }
+
+  /**
+   * Seek to note index
+   */
+  seekToNote(noteIndex) {
+    const time = noteIndex * this.noteDuration;
+    this.seek(time);
+  }
+
+  /**
+   * Get current playback time
+   */
+  getCurrentTime() {
+    if (this.isPlaying) {
+      return Tone.now() - this.startTime;
+    }
+    return this.pausedAt;
+  }
+
+  /**
+   * Get current note index
+   */
+  getCurrentNoteIndex() {
+    const time = this.getCurrentTime();
+    return Math.min(Math.floor(time / this.noteDuration), (this.notes?.length || 1) - 1);
+  }
+
+  /**
+   * Playback finished
+   */
+  finish() {
+    this.isPlaying = false;
+    this.pausedAt = this.duration;
+
+    if (this.player) {
+      try { this.player.stop(); } catch(e) {}
+    }
+
+    if (this.animationFrame) {
+      cancelAnimationFrame(this.animationFrame);
+      this.animationFrame = null;
+    }
+
+    if (this.onPlaybackEnd) {
+      this.onPlaybackEnd();
+    }
+  }
+
+  /**
+   * Animation loop for progress updates
+   */
+  _animateProgress() {
+    if (!this.isPlaying) return;
+
+    const currentTime = this.getCurrentTime();
+    const noteIndex = this.getCurrentNoteIndex();
+
+    if (this.onProgress) {
+      this.onProgress(currentTime, noteIndex);
+    }
+
+    this.animationFrame = requestAnimationFrame(() => this._animateProgress());
+  }
+
+  /**
+   * Dispose resources
+   */
+  dispose() {
+    this.stop();
+    if (this.player) {
+      this.player.dispose();
+      this.player = null;
+    }
   }
 }
 
@@ -569,7 +855,9 @@ if (typeof module !== 'undefined' && module.exports) {
     playNote,
     playNoteScheduled,
     calculateVelocity,
+    renderOMOffline,
     OMAudioPlayer,
+    OMOfflinePlayer,
     FORMANTS,
     WHITE_KEY_SEMITONES,
     SEMITONE_TO_NOTE,
