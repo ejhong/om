@@ -926,15 +926,15 @@
       ctx.textAlign = 'right';
       ctx.fillText('C', offsetX - 8, baselineY + 3);
 
-      // Draw VBR guide curve with smooth bezier interpolation
-      // Get VBR notes with their actual indices in allNotes
-      let vbrNotesWithIndex = allNotes
+      // Draw tension line curve with smooth bezier interpolation
+      // Get Y-line (tension) notes - those with non-zero trajectory
+      let tensionNotesWithIndex = allNotes
         .map((n, idx) => ({ note: n, index: idx }))
-        .filter(item => item.note.articulation === 'vbr');
+        .filter(item => item.note.trajStart !== 0);
 
-      if (vbrNotesWithIndex.length > 1) {
+      if (tensionNotesWithIndex.length > 1) {
         // Get points for the curve using actual positions in allNotes
-        const points = vbrNotesWithIndex.map(item => ({
+        const points = tensionNotesWithIndex.map(item => ({
           x: offsetX + (item.index / Math.max(1, allNotes.length - 1)) * graphWidth,
           y: graphTrajectoryToY(item.note.trajStart)
         }));
