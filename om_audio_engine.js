@@ -6,7 +6,7 @@
 // Optimize for smooth playback over low latency
 Tone.context.latencyHint = 'playback';
 
-// White key semitone offsets from C (c1=C, c2=D, c3=E, c4=F, c5=G, c6=A, c7=B, c8=C+octave)
+// Key semitone offsets (k1=C, k2=D, k3=E, k4=F, k5=G, k6=A, k7=B, k8=C+octave)
 const WHITE_KEY_SEMITONES = {
   1: 0,   // C
   2: 2,   // D
@@ -123,7 +123,7 @@ const FORMANTS = {
 };
 
 /**
- * Parse a voice spec like v/tlk_nrm/mdl/vbr/ol1/c1/sh8[-0.66]
+ * Parse a voice spec like v/tlk_nrm/mdl/vbr/ol1/k1/sh8[-0.66]
  */
 function parseVoiceSpec(spec) {
   // Try parsing with scale position (sl1-sl8 or sh1-sh8)
