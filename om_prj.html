@@ -843,8 +843,15 @@
       try {
         await Tone.start();
         if (currentSynthObj) {
-          try { currentSynthObj.dispose(); } catch(e) {}
+          const prev = currentSynthObj;
           currentSynthObj = null;
+          try {
+            const releaseTime = Math.max(0.05, prev.synth?.envelope?.release ?? 0.3);
+            prev.synth.triggerRelease(Tone.now());
+            setTimeout(() => { try { prev.dispose(); } catch(e) {} }, (releaseTime + 0.05) * 1000);
+          } catch(e) {
+            try { prev.dispose(); } catch(e) {}
+          }
         }
         const duration = Math.max(0.5, (baseDuration / Math.max(1, allNotes.length)) / playbackSpeed);
         // Single click is 6dB quieter to match perceived playback level (playback has overlapping notes)
@@ -1201,12 +1208,10 @@
 
       await Tone.start();
 
-      // If at or near the end, start from beginning
-      if (currentNoteIndex >= allNotes.length - 1) {
-        currentNoteIndex = 0;
-        playedSegments = [];
-        if (USE_OFFLINE_RENDERING) offlinePlayer.stop();
-      }
+      // Always start from beginning
+      currentNoteIndex = 0;
+      playedSegments = [];
+      if (USE_OFFLINE_RENDERING) offlinePlayer.stop();
 
       const startIndex = currentNoteIndex;
       isPlaying = true;
@@ -1500,6 +1505,9 @@
       for (const g of groupOrder) {
         if (parsedGroups[g]) allNotes.push(...parsedGroups[g]);
       }
+
+      // Show full graph immediately
+      playedSegments = allNotes.map((n, idx) => ({ note: n, index: idx }));
 
       renderNotesPanel();
       addSegmentMarkers();
