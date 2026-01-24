@@ -146,8 +146,6 @@ function parseVoiceSpec(spec) {
 function buildNote(spec, voiceType, mode, register, articulation, octaveLayer, pitchClass, pitchNum, scaleType, scaleNum, arg) {
   const baseOctave = parseInt(octaveLayer);
   const whiteKeyOffset = WHITE_KEY_SEMITONES[parseInt(pitchNum)] || 0;
-  const scaleWhiteKey = WHITE_KEY_SEMITONES[parseInt(scaleNum)] || 0;
-  const scaleOffset = scaleType === 'sh' ? scaleWhiteKey + 12 : scaleWhiteKey;
 
   // Compute KEY (ol + pitch, before scale offset)
   const keyExtraOctaves = Math.floor(whiteKeyOffset / 12);
@@ -159,7 +157,12 @@ function buildNote(spec, voiceType, mode, register, articulation, octaveLayer, p
   // Scale index 0-15 (sl1=0, sl8=7, sh1=8, sh8=15)
   const scaleIndex = (scaleType === 'sh' ? 8 : 0) + (parseInt(scaleNum) - 1);
 
-  let totalSemitones = whiteKeyOffset + scaleOffset;
+  // Adaptive scale: combine key + scale positions to always land on white keys
+  const combinedPos = parseInt(pitchNum) + parseInt(scaleNum) - 1;
+  const octaveShift = Math.floor((combinedPos - 1) / 7);
+  const posInOctave = ((combinedPos - 1) % 7) + 1;
+  const shOffset = scaleType === 'sh' ? 12 : 0;
+  let totalSemitones = WHITE_KEY_SEMITONES[posInOctave] + octaveShift * 12 + shOffset;
 
   // Falsetto shifts up an octave
   if (register === 'fls') {
