@@ -1112,7 +1112,7 @@
 
       // Draw current position indicator
       if (isPlaying && currentNoteIndex < allNotes.length) {
-        const x = offsetX + (currentNoteIndex / allNotes.length) * graphWidth;
+        const x = offsetX + (currentNoteIndex / Math.max(1, allNotes.length - 1)) * graphWidth;
         ctx.strokeStyle = '#9a8a78';  // warm bronze
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -1128,13 +1128,13 @@
 
       const segments = ['A1', 'A2', 'A3', 'A4', 'U1', 'U2', 'M1', 'M2'];
       let noteCount = 0;
+      const maxIdx = Math.max(1, allNotes.length - 1);
+      ctx.textAlign = 'left';
       for (const seg of segments) {
         if (parsedGroups[seg]) {
-          const startX = offsetX + (noteCount / allNotes.length) * graphWidth;
-          const segNotes = parsedGroups[seg].length;
-          const midX = startX + (segNotes / allNotes.length) * graphWidth / 2;
-          ctx.fillText(seg, midX, offsetY + graphHeight + 25);
-          noteCount += segNotes;
+          const x = offsetX + (noteCount / maxIdx) * graphWidth;
+          ctx.fillText(seg, x, offsetY + graphHeight + 25);
+          noteCount += parsedGroups[seg].length;
         }
       }
 
