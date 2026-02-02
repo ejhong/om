@@ -191,8 +191,8 @@ function buildNote(spec, voiceType, mode, register, articulation, octaveLayer, p
 
   // Calculate frequencies (apply global tuning offset)
   const baseSemitonesFromC4 = (finalOctave - 4) * 12 + semitoneInOctave + tuningOffset;
-  const startFrequency = 280 * Math.pow(2, (baseSemitonesFromC4 + trajStartSemitones) / 12);
-  const endFrequency = 280 * Math.pow(2, (baseSemitonesFromC4 + trajEndSemitones) / 12);
+  const startFrequency = 261.63 * Math.pow(2, (baseSemitonesFromC4 + trajStartSemitones) / 12);
+  const endFrequency = 261.63 * Math.pow(2, (baseSemitonesFromC4 + trajEndSemitones) / 12);
 
   return {
     raw: spec,
@@ -373,7 +373,7 @@ function createSynth(note, volumeDb = -6) {
   // Voice mode filters
   if (isOperatic) {
     // Operatic: boost chest resonance, add singer's formant ring
-    operaticFilters.push(new Tone.Filter({ frequency: 2800, type: 'peaking', gain: 8, Q: 3 }));  // singer's ring
+    operaticFilters.push(new Tone.Filter({ frequency: 261.630, type: 'peaking', gain: 8, Q: 3 }));  // singer's ring
     operaticFilters.push(new Tone.Filter({ frequency: 400, type: 'peaking', gain: 6, Q: 1 }));  // chest warmth
   } else {
     // Normal: thinner, more nasal, speech-like

@@ -1165,7 +1165,7 @@
 
       // Hz display above frame (offset right to make room for preset dropdown)
       const tuning = getTuning();
-      const baseHz = 280 * Math.pow(2, tuning / 12);
+      const baseHz = 261.63 * Math.pow(2, tuning / 12);
       ctx.font = '10px SF Mono, Monaco, monospace';
       ctx.textAlign = 'left';
       ctx.fillStyle = '#8a7d6d';
@@ -1478,8 +1478,8 @@
       tuningEffects.forEach(e => e.dispose());
       tuningEffects = [];
 
-      // Calculate frequency: C4 = 280 Hz, shifted by semitones
-      const freq = 280 * Math.pow(2, semitones / 12);
+      // Calculate frequency: C4 = 261.63 Hz, shifted by semitones
+      const freq = 261.63 * Math.pow(2, semitones / 12);
 
       // Use FMSynth similar to tlk/mdl/sld voice
       tuningTone = new Tone.FMSynth({
