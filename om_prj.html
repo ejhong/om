@@ -1049,7 +1049,7 @@
       for (let i = 0; i < allNotes.length; i++) {
         const note = allNotes[i];
         const scaleIndex = note.scaleIndex !== undefined ? note.scaleIndex : 0;
-        const isCurrentNote = isPlaying && i === currentNoteIndex;
+        const isCurrentNote = (isPlaying || hasSeeked) && i === currentNoteIndex;
 
         const barHeight = ((15 - scaleIndex) / 15) * barMaxHeight;
         const barX = offsetX + (i / Math.max(1, allNotes.length - 1)) * graphWidth;
@@ -1111,7 +1111,7 @@
       const segmentWidth = Math.max(4, graphWidth / allNotes.length);
       for (let i = 0; i < allNotes.length; i++) {
         const note = allNotes[i];
-        const isCurrentNote = isPlaying && i === currentNoteIndex;
+        const isCurrentNote = (isPlaying || hasSeeked) && i === currentNoteIndex;
 
         // Use original color, just brighter opacity for current note
         const color = VOICE_COLORS[note.voiceType] || '#8a7d6d';
@@ -1136,7 +1136,7 @@
       }
 
       // Draw current position indicator
-      if (isPlaying && currentNoteIndex < allNotes.length) {
+      if ((isPlaying || hasSeeked) && currentNoteIndex < allNotes.length) {
         const x = offsetX + (currentNoteIndex / Math.max(1, allNotes.length - 1)) * graphWidth;
         ctx.strokeStyle = '#9a8a78';  // warm bronze
         ctx.lineWidth = 2;
@@ -1360,6 +1360,7 @@
     // Timeline seeking (click and drag)
     const timeline = document.getElementById('timeline');
     let isDragging = false;
+    let hasSeeked = false;  // track if user has seeked
 
     function seekToPosition(e) {
       const rect = timeline.getBoundingClientRect();
@@ -1373,6 +1374,7 @@
 
       // Update position
       currentNoteIndex = noteIndex;
+      hasSeeked = true;
       playedSegments = allNotes.slice(0, noteIndex).map((n, idx) => ({ note: n, index: idx }));
 
       // Update offline player position (if using offline mode)
