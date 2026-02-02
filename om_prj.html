@@ -1042,26 +1042,26 @@
       ctx.textAlign = 'right';
       ctx.fillText('C', offsetX - 8, baselineY + 3);
 
-      // Draw scale index as upside-down bar chart inside graph box
-      const barChartTop = offsetY - 10;  // start near top of graph box
+      // Draw scale index as bar chart at bottom of frame
       const barMaxHeight = 35;  // max bar height for scaleIndex=15
+      const barChartBase = offsetY + graphHeight + 5 + barMaxHeight;  // bottom baseline
 
       for (let i = 0; i < allNotes.length; i++) {
         const note = allNotes[i];
         const scaleIndex = note.scaleIndex !== undefined ? note.scaleIndex : 0;
         const isCurrentNote = isPlaying && i === currentNoteIndex;
 
-        const barHeight = (scaleIndex / 15) * barMaxHeight;
+        const barHeight = ((15 - scaleIndex) / 15) * barMaxHeight;
         const barX = offsetX + (i / Math.max(1, allNotes.length - 1)) * graphWidth;
 
-        // Draw bar hanging down from top
+        // Draw bar growing up from baseline
         const barColor = VOICE_COLORS[note.voiceType] || '#8a7d6d';
         ctx.strokeStyle = barColor;
         ctx.globalAlpha = isCurrentNote ? 1.0 : 0.35;
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(barX, barChartTop);
-        ctx.lineTo(barX, barChartTop + barHeight);
+        ctx.moveTo(barX, barChartBase);
+        ctx.lineTo(barX, barChartBase - barHeight);
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
@@ -1158,7 +1158,7 @@
       for (const seg of segments) {
         if (parsedGroups[seg]) {
           const x = offsetX + (noteCount / maxIdx) * graphWidth;
-          ctx.fillText(seg, x, offsetY + graphHeight + 25);
+          ctx.fillText(seg, x, offsetY + 5);
           noteCount += parsedGroups[seg].length;
         }
       }
