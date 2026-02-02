@@ -191,8 +191,8 @@ function buildNote(spec, voiceType, mode, register, articulation, octaveLayer, p
 
   // Calculate frequencies (apply global tuning offset)
   const baseSemitonesFromC4 = (finalOctave - 4) * 12 + semitoneInOctave + tuningOffset;
-  const startFrequency = 261.63 * Math.pow(2, (baseSemitonesFromC4 + trajStartSemitones) / 12);
-  const endFrequency = 261.63 * Math.pow(2, (baseSemitonesFromC4 + trajEndSemitones) / 12);
+  const startFrequency = 280 * Math.pow(2, (baseSemitonesFromC4 + trajStartSemitones) / 12);
+  const endFrequency = 280 * Math.pow(2, (baseSemitonesFromC4 + trajEndSemitones) / 12);
 
   return {
     raw: spec,
