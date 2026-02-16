@@ -825,8 +825,8 @@
           const trajStr = note.trajStart >= 0 ? `+${note.trajStart.toFixed(2)}` : note.trajStart.toFixed(2);
           const freqStr = note.frequency.toFixed(2);
 
-          const scaleStr = String(note.scaleIndex).padStart(2, '0');
-          item.textContent = `${note.voiceType}_${note.mode}/${note.register}/${note.articulation}/${note.keyNote}+${scaleStr}=${note.noteName}:${trajStr} ${freqStr}Hz`;
+          const scaleStr = note.scaleOffset >= 0 ? `+${String(note.scaleOffset).padStart(2, '0')}` : `-${String(Math.abs(note.scaleOffset)).padStart(2, '0')}`;
+          item.textContent = `${note.voiceType}_${note.mode}/${note.register}/${note.articulation}/${note.keyNote}${scaleStr}=${note.noteName}:${trajStr} ${freqStr}Hz`;
 
           item.addEventListener('click', () => playSingleNote(note));
           panel.appendChild(item);

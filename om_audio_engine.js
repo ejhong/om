@@ -215,6 +215,7 @@ function buildNote(spec, voiceType, mode, register, articulation, octaveType, oc
     scaleNum: parseInt(scaleNum),
     keyNote,
     scaleIndex,
+    scaleOffset,
     trajStart,
     trajEnd,
     trajStartSemitones,
