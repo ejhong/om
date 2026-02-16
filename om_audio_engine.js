@@ -126,28 +126,30 @@ const FORMANTS = {
  * Parse a voice spec like v/tlk_nrm/mdl/vbr/ol1/k1/sh8[-0.66]
  */
 function parseVoiceSpec(spec) {
-  // Try parsing with scale position (sl1-sl8 or sh1-sh8)
-  let match = spec.match(/v\/(\w+)_(\w+)\/(\w+)\/(\w+)\/ol(\d)\/(\w)(\d)\/(s[lh])(\d)(?:\[([-\d.:]+)\])?/);
+  // Try parsing with scale position (sl1-sl8 or sh1-sh8), supports ol1/ol2/oh1/oh2
+  let match = spec.match(/v\/(\w+)_(\w+)\/(\w+)\/(\w+)\/o([lh])(\d)\/(\w)(\d)\/(s[lh])(\d)(?:\[([-\d.:]+)\])?/);
 
   if (!match) {
     // Fallback: old format with just sh8
-    match = spec.match(/v\/(\w+)_(\w+)\/(\w+)\/(\w+)\/ol(\d)\/(\w)(\d)\/sh(\d)(?:\[([-\d.:]+)\])?/);
+    match = spec.match(/v\/(\w+)_(\w+)\/(\w+)\/(\w+)\/o([lh])(\d)\/(\w)(\d)\/sh(\d)(?:\[([-\d.:]+)\])?/);
     if (match) {
-      const [_, voiceType, mode, register, articulation, octaveLayer, pitchClass, pitchNum, scaleNum, arg] = match;
-      return buildNote(spec, voiceType, mode, register, articulation, octaveLayer, pitchClass, pitchNum, 'sh', scaleNum, arg);
+      const [_, voiceType, mode, register, articulation, octaveType, octaveNum, pitchClass, pitchNum, scaleNum, arg] = match;
+      return buildNote(spec, voiceType, mode, register, articulation, octaveType, octaveNum, pitchClass, pitchNum, 'sh', scaleNum, arg);
     }
     return null;
   }
 
-  const [_, voiceType, mode, register, articulation, octaveLayer, pitchClass, pitchNum, scaleType, scaleNum, arg] = match;
-  return buildNote(spec, voiceType, mode, register, articulation, octaveLayer, pitchClass, pitchNum, scaleType, scaleNum, arg);
+  const [_, voiceType, mode, register, articulation, octaveType, octaveNum, pitchClass, pitchNum, scaleType, scaleNum, arg] = match;
+  return buildNote(spec, voiceType, mode, register, articulation, octaveType, octaveNum, pitchClass, pitchNum, scaleType, scaleNum, arg);
 }
 
-function buildNote(spec, voiceType, mode, register, articulation, octaveLayer, pitchClass, pitchNum, scaleType, scaleNum, arg) {
-  const baseOctave = parseInt(octaveLayer);
+function buildNote(spec, voiceType, mode, register, articulation, octaveType, octaveNum, pitchClass, pitchNum, scaleType, scaleNum, arg) {
+  // oh (octave high) adds 2 octaves to the base
+  const octaveTypeOffset = octaveType === 'h' ? 2 : 0;
+  const baseOctave = parseInt(octaveNum) + octaveTypeOffset;
   const whiteKeyOffset = WHITE_KEY_SEMITONES[parseInt(pitchNum)] || 0;
 
-  // Compute KEY (ol + pitch, before scale offset)
+  // Compute KEY (ol/oh + pitch, before scale offset)
   const keyExtraOctaves = Math.floor(whiteKeyOffset / 12);
   const keySemitone = whiteKeyOffset % 12;
   const keyOctave = baseOctave + keyExtraOctaves;
@@ -157,12 +159,17 @@ function buildNote(spec, voiceType, mode, register, articulation, octaveLayer, p
   // Scale index 0-15 (sl1=0, sl8=7, sh1=8, sh8=15)
   const scaleIndex = (scaleType === 'sh' ? 8 : 0) + (parseInt(scaleNum) - 1);
 
-  // Adaptive scale: combine key + scale positions to always land on white keys
-  const combinedPos = parseInt(pitchNum) + parseInt(scaleNum) - 1;
-  const octaveShift = Math.floor((combinedPos - 1) / 7);
-  const posInOctave = ((combinedPos - 1) % 7) + 1;
-  const shOffset = scaleType === 'sh' ? 12 : 0;
-  let totalSemitones = WHITE_KEY_SEMITONES[posInOctave] + octaveShift * 12 + shOffset;
+  // Scale offsets: sl lowers (sl8=0, sl1=-7), sh raises (sh1=0, sh8=7)
+  const scaleOffset = scaleType === 'sl'
+    ? parseInt(scaleNum) - 8   // sl8=0, sl7=-1, ..., sl1=-7
+    : parseInt(scaleNum) - 1;  // sh1=0, sh2=1, ..., sh8=7
+  const combinedPos = parseInt(pitchNum) + scaleOffset;
+
+  // Handle negative positions by wrapping to lower octave
+  const positionFromC = combinedPos - 1;
+  const octaveShift = Math.floor(positionFromC / 7);
+  const posInOctave = ((positionFromC % 7) + 7) % 7 + 1;  // Always positive 1-7
+  let totalSemitones = WHITE_KEY_SEMITONES[posInOctave] + octaveShift * 12;
 
   // Falsetto shifts up an octave
   if (register === 'fls') {
@@ -200,7 +207,8 @@ function buildNote(spec, voiceType, mode, register, articulation, octaveLayer, p
     mode,
     register,
     articulation,
-    octaveLayer: parseInt(octaveLayer),
+    octaveType,
+    octaveNum: parseInt(octaveNum),
     pitchClass: pitchClass.toUpperCase(),
     pitchNum: parseInt(pitchNum),
     scaleType,
