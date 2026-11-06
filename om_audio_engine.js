@@ -6,6 +6,13 @@
 // Optimize for smooth playback over low latency
 Tone.context.latencyHint = 'playback';
 
+// iPhones play Web Audio through an "ambient" audio session, which the ring/silent switch mutes: on a phone set
+// to silent the page plays nothing. A "playback" session plays like any media (Safari 17+; browsers without
+// navigator.audioSession are unaffected).
+if (navigator.audioSession) {
+  try { navigator.audioSession.type = 'playback'; } catch (e) { /* unsupported */ }
+}
+
 // Key semitone offsets (k1=C, k2=D, k3=E, k4=F, k5=G, k6=A, k7=B, k8=C+octave)
 const WHITE_KEY_SEMITONES = {
   1: 0,   // C
