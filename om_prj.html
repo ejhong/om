@@ -75,10 +75,31 @@
       flex-shrink: 0;
     }
 
+    .title-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      align-self: stretch;
+    }
+
     .title {
       font-size: 20px;
       font-weight: 700;
       letter-spacing: 0.5px;
+    }
+
+    .paper-link {
+      font-size: 14px;
+      color: var(--accent-dark);
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .paper-link:hover {
+      color: var(--text-primary);
+      text-decoration: underline;
+      text-underline-offset: 3px;
     }
 
     .subtitle-quote {
@@ -509,6 +530,10 @@
         font-size: 14px;
       }
 
+      .paper-link {
+        font-size: 12px;
+      }
+
       .main-content {
         flex-direction: column;
         padding: 8px;
@@ -564,7 +589,10 @@
 <body>
   <!-- Top Bar -->
   <div class="top-bar">
-    <div class="title">The OM Project</div>
+    <div class="title-row">
+      <div class="title">The OM Project</div>
+      <a class="paper-link" href="om_paper.html">Position paper</a>
+    </div>
     <div class="subtitle-quote">
       "Om is this imperishable word. Om is the universe, and this is the exposition of Om. The past, the present, and the future—all that was, all that is, all that will be—is Om. And whatever lies beyond in eternity, that too is Om."
       <span class="attribution">— Mandukya Upanishad</span>
